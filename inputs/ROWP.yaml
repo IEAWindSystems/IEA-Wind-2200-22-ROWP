@@ -57,3 +57,8 @@ layouts:
                 5834970.22419717, 5835160.53740336, 5835990.59663528, 5833058.70593459,
             ]
 turbines: !include IEA37_22MW_turbine.yaml
+electrical_substations:
+    electrical_substation:
+        coordinates:
+            x: [554395.1, 549905.6]
+            y: [5836951.8,5829544.0]       

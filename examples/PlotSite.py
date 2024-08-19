@@ -24,8 +24,8 @@ Tx = farm['layouts']['initial_layout']['coordinates']['x']
 Ty = farm['layouts']['initial_layout']['coordinates']['y']
 
 # # Cable and substation data
-Subs_x = [554395.1,549905.6]
-Subs_y = [5836951.8,5829544.0]
+Subs_x = system['wind_farm']['electrical_substations']['electrical_substation']['coordinates']['x']
+Subs_y = system['wind_farm']['electrical_substations']['electrical_substation']['coordinates']['y']
 
 # Create plot
 fig = plt.figure()
