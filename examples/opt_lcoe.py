@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import xarray as xr
 import os
 import yaml
+import utm
 from py_wake.site import XRSite
 from py_wake.wind_turbines import WindTurbine
 from py_wake.wind_turbines.power_ct_functions import PowerCtTabular
@@ -24,6 +25,7 @@ from topfarm.constraint_components.constraint_aggregation import ConstraintAggre
 from topfarm.constraint_components.constraint_aggregation import DistanceConstraintAggregation
 from py_wake.turbulence_models import CrespoHernandez
 from windIO.utils.yml_utils import load_yaml
+from ssms.CalculateMass import CalculateMass
 np.random.seed(2)
 #
 # -------------
@@ -130,6 +132,17 @@ dirs = np.arange(0, 360, 1) #wind directions
 speeds = np.arange(cut_in, cut_out+1, 1) # wind speeds
 freqs = site.local_wind(x0, y0, wd=dirs, ws=speeds).P_ilk[0, :, :]     # all frequencies
 
+# bathymetry
+X = np.array(system_dat['site']['Bathymetry']['latitude'])
+Y = np.array(system_dat['site']['Bathymetry']['longitude'])
+Z = np.array(system_dat['site']['Bathymetry']['elevation']['data'])
+# Transfer from LongLat to UTM (km)
+X_utm = utm.from_latlon(np.ones(len(Y))*X[0],Y)
+Y_utm = utm.from_latlon(X,np.ones(len(X))*Y[0])
+
+
+
+
 # objective function and gradient function
 samps = 50    #number of samples 
 site.interp_method = 'linear'
@@ -161,7 +174,24 @@ def lcoe_func(x, y, **kwargs):
     wd = np.arange(0, 360, 1)
     #ws = np.arange(3, 25, 1)
     aep = wake_model(x, y, wd=wd, ws=ws, TI=TI).aep().sum().values * 1e6
+    # Inputs
+    RP = 10              # MW
+    D = 198              # m
+    HH = 145             # m
+    HTrans = 10          # m
+    WaveHeight = 2.52    # m
+    WavePeriod = 5.45    # s
+    WindSpeed = 9.924    # m/s ToDo: verfiy it is average wind speed
+    # Calculate Water Depth for current x/y coordinates
     
+
+
+
+    
+    
+    WaterDepth = 33.77   # m
+    # Call surrogate
+    mass = CalculateMass(RP=RP, D=D, HTrans=HTrans, HHub_Ratio=HH/D, WaterDepth=WaterDepth, WaveHeight=WaveHeight, WavePeriod=WavePeriod, WindSpeed=WindSpeed)
     
     return aep
 
