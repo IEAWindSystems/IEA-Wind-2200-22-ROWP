@@ -203,34 +203,38 @@ def aep_func(x, y, full=False, **kwargs):
 def lcoe_func(x, y, **kwargs):
     wd = np.arange(0, 360, 1)
     #ws = np.arange(3, 25, 1)
-    aep = wake_model(x, y, wd=wd, ws=ws, TI=TI).aep().sum().values * 1e6
+    aep = wake_model(x, y, wd=wd, ws=ws, TI=TI).aep().sum().values
     # Inputs
-    RP = 10              # MW
-    D = 198              # m
-    HH = 145             # m
-    HTrans = 10          # m
+    d = 0.05             # [-] discount rate
+    life = 25            # years, lifetime
+    RP = 22              # MW
+    D = 284              # m
+    HH = 170             # m
+    HTrans = 15          # m
     WaveHeight = 2.52    # m
     WavePeriod = 5.45    # s
     WindSpeed = 9.924    # m/s ToDo: verfiy it is average wind speed
     # Calculate Water Depth for current x/y coordinates
-    
-
-
-
-    
-    
-    WaterDepth = 33.77   # m
-    # Call surrogate
     depths = depth_interp(x, y)
+    # Call Monopile Mass Surrogate
+    # ToDo: Verify mass surrogate. It seems to suggest higher mass with lower rater power. Same for diameter. Does not make sense.
     masses = []
     for water_depth in depths:
        mass = CalculateMass(RP=RP, D=D, HTrans=HTrans, HHub_Ratio=HH/D, WaterDepth=water_depth, WaveHeight=WaveHeight, WavePeriod=WavePeriod, WindSpeed=WindSpeed)
-       masses.append(np.sum(mass))
-    # todo: interpoalte depth for turbine-specific masses
-    
-    return aep
+       masses.append(mass[0][0])
+    # Cost function (mass in kg to $2010)
+    mp_cost = [x * 2.25 for x in masses]  # from NREL ORBIT
+    # Other cost
+    capex = 5.5258e7        # $2010 per turbine, excl. Monopile, from DETECT for HKN scaled (22MW turbines)
+    OpexAnnual = 1.3564e6   # $2010 per turbine, annual OPEX, from DETECT for HKN scaled (22MW turbines)
+    LP = 2.6447e+06         # $2010 per turbine, liquidation proceeds, from DETECT for HKN scaled (22MW turbines)
+    # LCOE calculus
+    CRF = d / (1-(1 + d)**-life)
+    npv = (capex*len(x) + sum(mp_cost) + LP*len(x)) * CRF + OpexAnnual*len(x)
+    lcoe = npv / (aep*1e3)
+    return lcoe
 
-lcoe_func(x0, y0)
+lcoe = lcoe_func(x0, y0)
 #gradient function - SGD
 def aep_jac(x, y, **kwargs):
     wd, ws = sampling()
