@@ -26,6 +26,7 @@ from topfarm.constraint_components.constraint_aggregation import DistanceConstra
 from py_wake.turbulence_models import CrespoHernandez
 from windIO.utils.yml_utils import load_yaml
 from ssms.CalculateMass import CalculateMass
+from scipy.interpolate import RegularGridInterpolator
 np.random.seed(2)
 #
 # -------------
@@ -62,7 +63,8 @@ else:
 # ----------------------------------------------------------------------
 #
 # system_dat = sys.argv[1]
-system_dat = load_yaml('..\inputs\wind_energy_system.yaml')
+import os
+system_dat = load_yaml(os.sep.join(['..', 'inputs', 'wind_energy_system.yaml']))
 farm_dat = system_dat['wind_farm']
 resource_dat = system_dat['site']['energy_resource']
 
@@ -136,9 +138,37 @@ freqs = site.local_wind(x0, y0, wd=dirs, ws=speeds).P_ilk[0, :, :]     # all fre
 X = np.array(system_dat['site']['Bathymetry']['latitude'])
 Y = np.array(system_dat['site']['Bathymetry']['longitude'])
 Z = np.array(system_dat['site']['Bathymetry']['elevation']['data'])
+
 # Transfer from LongLat to UTM (km)
 X_utm = utm.from_latlon(np.ones(len(Y))*X[0],Y)
 Y_utm = utm.from_latlon(X,np.ones(len(X))*Y[0])
+
+# Create grids
+lon_grid, lat_grid = np.meshgrid(Y, X)
+
+# Convert to UTM
+Easting, Northing, _, _ = utm.from_latlon(lat_grid, lon_grid)
+
+# Flip arrays if necessary
+if not np.all(np.diff(Easting[0, :]) > 0):
+    Easting = np.fliplr(Easting)
+    Z = np.fliplr(Z)
+if not np.all(np.diff(Northing[:, 0]) > 0):
+    Northing = np.flipud(Northing)
+    Z = np.flipud(Z)
+
+# Extract coordinate arrays
+northing_values = Northing[:, 0]  # Corresponds to axis 0 of Z
+easting_values = Easting[0, :]    # Corresponds to axis 1 of Z
+
+# Ensure arrays are sorted
+assert np.all(np.diff(northing_values) > 0), "Northing values are not strictly increasing."
+assert np.all(np.diff(easting_values) > 0), "Easting values are not strictly increasing."
+
+# Create the interpolator
+interpolator = RegularGridInterpolator((northing_values, easting_values), Z)
+def depth_interp(x, y):
+    return interpolator(np.array([y, x]).T)
 
 
 
@@ -191,11 +221,16 @@ def lcoe_func(x, y, **kwargs):
     
     WaterDepth = 33.77   # m
     # Call surrogate
-    mass = CalculateMass(RP=RP, D=D, HTrans=HTrans, HHub_Ratio=HH/D, WaterDepth=WaterDepth, WaveHeight=WaveHeight, WavePeriod=WavePeriod, WindSpeed=WindSpeed)
+    depths = depth_interp(x, y)
+    masses = []
+    for water_depth in depths:
+       mass = CalculateMass(RP=RP, D=D, HTrans=HTrans, HHub_Ratio=HH/D, WaterDepth=water_depth, WaveHeight=WaveHeight, WavePeriod=WavePeriod, WindSpeed=WindSpeed)
+       masses.append(np.sum(mass))
+    # todo: interpoalte depth for turbine-specific masses
     
     return aep
 
-
+lcoe_func(x0, y0)
 #gradient function - SGD
 def aep_jac(x, y, **kwargs):
     wd, ws = sampling()
