@@ -23,7 +23,7 @@ class QLSModel(object):
 
 def CalculateMass(RP, D, HTrans, HHub_Ratio, WaterDepth, WaveHeight, WavePeriod, WindSpeed):
     # load the surrogates
-    model_path = 'models/QLS'
+    model_path = 'ssms/models/QLS'
     model_indicator = '_QLS_surrogate_model.pickle'
     
     files = []
@@ -53,15 +53,15 @@ def CalculateMass(RP, D, HTrans, HHub_Ratio, WaterDepth, WaveHeight, WavePeriod,
 
 #%% Sample run
 # Inputs
-rating = 10             # MW
-D = 198                 # m
-HH = 145                # m
-PlatformHeight = 10     # m
-WaterDepth = 33.77      # m
-SignificantWaveHeight = 2.52    # m
-SignificantWavePeriod = 5.45    # s
-V_ave = 9.924           # m/s
-# Call surrogate
-mass = CalculateMass(rating,D,PlatformHeight,HH/D,WaterDepth,SignificantWaveHeight,SignificantWavePeriod, V_ave)
-print(f'Monopile mass: {mass[0][0]:.1f} kg')
-print(f'Tower mass: {mass[1][0]:.1f} kg')
+# rating = 10             # MW
+# D = 198                 # m
+# HH = 145                # m
+# PlatformHeight = 10     # m
+# WaterDepth = 33.77      # m
+# SignificantWaveHeight = 2.52    # m
+# SignificantWavePeriod = 5.45    # s
+# V_ave = 9.924           # m/s
+# # Call surrogate
+# mass = CalculateMass(rating,D,PlatformHeight,HH/D,WaterDepth,SignificantWaveHeight,SignificantWavePeriod, V_ave)
+# print(f'Monopile mass: {mass[0][0]:.1f} kg')
+# print(f'Tower mass: {mass[1][0]:.1f} kg')
