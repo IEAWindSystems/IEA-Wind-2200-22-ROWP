@@ -20,6 +20,7 @@ from topfarm.plotting import XYPlotComp, NoPlot
 from topfarm.constraint_components.spacing import SpacingConstraint
 from topfarm import TopFarmProblem
 from topfarm.constraint_components.boundary import XYBoundaryConstraint, InclusionZone, ExclusionZone
+from py_wake.utils.gradients import fd, cs, autograd
 from topfarm.recorders import TopFarmListRecorder
 from topfarm.constraint_components.constraint_aggregation import ConstraintAggregation
 from topfarm.constraint_components.constraint_aggregation import DistanceConstraintAggregation
@@ -137,7 +138,7 @@ freqs = site.local_wind(x0, y0, wd=dirs, ws=speeds).P_ilk[0, :, :]     # all fre
 # bathymetry
 X = np.array(system_dat['site']['Bathymetry']['latitude'])
 Y = np.array(system_dat['site']['Bathymetry']['longitude'])
-Z = np.array(system_dat['site']['Bathymetry']['elevation']['data'])
+Z = np.array(system_dat['site']['Bathymetry']['elevation']['data']) 
 
 # Transfer from LongLat to UTM (km)
 X_utm = utm.from_latlon(np.ones(len(Y))*X[0],Y)
@@ -166,11 +167,16 @@ assert np.all(np.diff(northing_values) > 0), "Northing values are not strictly i
 assert np.all(np.diff(easting_values) > 0), "Easting values are not strictly increasing."
 
 # Create the interpolator
-interpolator = RegularGridInterpolator((northing_values, easting_values), Z)
+interpolator = RegularGridInterpolator((northing_values, easting_values), Z, method='cubic')
 def depth_interp(x, y):
     return interpolator(np.array([y, x]).T)
 
 
+# Fit a polynomial of degree 2
+depthmass = np.genfromtxt('depth.mass', delimiter=',')
+coefficients = np.polyfit(depthmass[:, 0], depthmass[:, 1], 2)
+polynomial = np.poly1d(coefficients)
+polynomial_gradients = np.polyder(polynomial)
 
 
 # objective function and gradient function
@@ -200,41 +206,82 @@ def aep_func(x, y, full=False, **kwargs):
 
 #lcoe function - SGD
 #aep function - SLSQP
+d = 0.05             # [-] discount rate
+life = 25            # years, lifetime
+RP = 22              # MW
+D = 284              # m
+HH = 170             # m
+HTrans = 15          # m
+WaveHeight = 2.52    # m
+WavePeriod = 5.45    # s
+WindSpeed = 9.924    # m/s ToDo: verfiy it is average wind speed
+capex = 5.5258e7        # $2010 per turbine, excl. Monopile, from DETECT for HKN scaled (22MW turbines)
+OpexAnnual = 1.3564e6   # $2010 per turbine, annual OPEX, from DETECT for HKN scaled (22MW turbines)
+LP = 2.6447e+06         # $2010 per turbine, liquidation proceeds, from DETECT for HKN scaled (22MW turbines)
 def lcoe_func(x, y, **kwargs):
     wd = np.arange(0, 360, 1)
-    #ws = np.arange(3, 25, 1)
-    aep = wake_model(x, y, wd=wd, ws=ws, TI=TI).aep().sum().values
-    # Inputs
-    d = 0.05             # [-] discount rate
-    life = 25            # years, lifetime
-    RP = 22              # MW
-    D = 284              # m
-    HH = 170             # m
-    HTrans = 15          # m
-    WaveHeight = 2.52    # m
-    WavePeriod = 5.45    # s
-    WindSpeed = 9.924    # m/s ToDo: verfiy it is average wind speed
-    # Calculate Water Depth for current x/y coordinates
+    aep = wake_model(x, y, wd=wd, ws=ws, TI=TI).aep().sum().values / 1e3
     depths = depth_interp(x, y)
-    # Call Monopile Mass Surrogate
     # ToDo: Verify mass surrogate. It seems to suggest higher mass with lower rater power. Same for diameter. Does not make sense.
     masses = []
     for water_depth in depths:
-       mass = CalculateMass(RP=RP, D=D, HTrans=HTrans, HHub_Ratio=HH/D, WaterDepth=water_depth, WaveHeight=WaveHeight, WavePeriod=WavePeriod, WindSpeed=WindSpeed)
-       masses.append(mass[0][0])
+       #masses.append((water_depth))
+       masses.append(polynomial(water_depth))
+       #mass = CalculateMass(RP=RP, D=D, HTrans=HTrans, HHub_Ratio=HH/D, WaterDepth=water_depth, WaveHeight=WaveHeight, WavePeriod=WavePeriod, WindSpeed=WindSpeed)
+       #masses.append(mass[0][0])
     # Cost function (mass in kg to $2010)
     mp_cost = [x * 2.25 for x in masses]  # from NREL ORBIT
     # Other cost
-    capex = 5.5258e7        # $2010 per turbine, excl. Monopile, from DETECT for HKN scaled (22MW turbines)
-    OpexAnnual = 1.3564e6   # $2010 per turbine, annual OPEX, from DETECT for HKN scaled (22MW turbines)
-    LP = 2.6447e+06         # $2010 per turbine, liquidation proceeds, from DETECT for HKN scaled (22MW turbines)
     # LCOE calculus
-    CRF = d / (1-(1 + d)**-life)
-    npv = (capex*len(x) + sum(mp_cost) + LP*len(x)) * CRF + OpexAnnual*len(x)
-    lcoe = npv / (aep*1e3)
-    return lcoe
+    CRF = d / (1 - (1 + d) ** -life)
+    npv = (capex*len(x) + np.sum(mp_cost) + LP*len(x)) * CRF + OpexAnnual*len(x)
+    lcoe = npv / aep
+    #return npv / 1e6
+    return -1 * lcoe / 1e6 # M$/GWh
+
+def wrap_depth(s): 
+    return depth_interp(*np.split(s, 2))
+
+depth_grad = fd(wrap_depth, step=0.01)
+
+def get_depth_grads(x, y):
+    grads = []
+    for ii in range(len(x)):
+       grads.append(depth_grad([x[ii], y[ii]]))
+    return np.array(grads)
+
+def lcoe_jac(x, y, **kwargs):
+    wd = np.arange(0, 360, 1)
+    daep = wake_model.aep_gradients(gradient_method=autograd, wrt_arg=['x', 'y'], x=x, y=y, wd=wd, ws=ws, TI=TI) / 1e3
+    aep = wake_model.aep(x=x, y=y, wd=wd, ws=ws, TI=TI) / 1e3
+    depths = depth_interp(x, y)
+    masses = []
+    dmasses = []
+    for water_depth in depths:
+       dmasses.append(polynomial_gradients(water_depth))
+       masses.append(polynomial(water_depth))
+       #masses.append(polynomial(water_depth))
+       #mass = CalculateMass(RP=RP, D=D, HTrans=HTrans, HHub_Ratio=HH/D, WaterDepth=water_depth, WaveHeight=WaveHeight, WavePeriod=WavePeriod, WindSpeed=WindSpeed)
+       #masses.append(mass[0][0])
+    #d_masses = np.array(np.split(fd_mass(np.append(x, y)), 2))
+    CRF = d / (1 - (1 + d) ** -life)
+    mp_cost = 2.25 * np.array(masses) 
+    npv = (capex * len(x) + sum(mp_cost) + LP*len(x)) * CRF + OpexAnnual*len(x)
+    #d_masses = get_depth_grads(x, y)[:, 0, :].T
+    d_masses = (np.array(dmasses) * get_depth_grads(x, y)[:, 0, :].T)
+    dnpv = 2.25 * d_masses / 1e6 * CRF 
+    npv /= 1e6
+    dlcoe = (aep * dnpv - daep * npv) / (aep ** 2)
+    return -1 * dlcoe
+    #return dnpv # dlcoe
 
 lcoe = lcoe_func(x0, y0)
+lcoe_grad = lcoe_jac(x0, y0)
+def wrap_lcoe(s): return lcoe_func(*np.split(s, 2))
+grad = fd(wrap_lcoe, 0.000001)(np.append(x0, y0))
+print('difference between fd and analytic grads: ')
+print(grad - np.array(lcoe_grad).flatten())
+
 #gradient function - SGD
 def aep_jac(x, y, **kwargs):
     wd, ws = sampling()
@@ -279,6 +326,8 @@ elif Zone == 'North+Mid':
 #aep component - SGD
 aep_comp = CostModelComponent(input_keys=['x','y'], n_wt=n_wt, cost_function=aep_func, objective=True, cost_gradient_function=aep_jac, maximize=True)
 
+lcoe_comp = CostModelComponent(input_keys=['x','y'], n_wt=n_wt, cost_function=lcoe_func, objective=True, cost_gradient_function=lcoe_jac, maximize=True)
+
 #aep component - SLSQP
 aep_comp2 = CostModelComponent(input_keys=['x','y'], n_wt=n_wt, cost_function=aep_func2, objective=True, cost_gradient_function=aep_jac2, maximize=True)
 
@@ -298,24 +347,23 @@ constraints = [[SpacingConstraint(min_spacing_m), constraint_comp],
 #driver specs
 driver_names = ['SLSQP', 'SGD_again']
 drivers = [EasyScipyOptimizeDriver(maxiter=200, tol=1e-3),
-           EasySGDDriver(maxiter=10000, learning_rate=windTurbines.diameter(), max_time=1008000, gamma_min_factor=0.1, speedupSGD=True, sgd_thresh=0.05)]
+           EasySGDDriver(maxiter=3000, learning_rate=windTurbines.diameter(), max_time=1008000, gamma_min_factor=0.1, speedupSGD=True, sgd_thresh=0.12)]
 
 driver_no = 1    #SGD driver
 ec = [10,1]      #expected cost for SLSQP (10) and SGD (1) drivers
 
 tf = TopFarmProblem(
         design_vars = {'x':x0, 'y':y0},         
-        cost_comp = cost_comps[driver_no],    
+        cost_comp = lcoe_comp,
         constraints = constraints[driver_no], 
         driver = drivers[driver_no],
-        plot_comp = NoPlot(),
+        plot_comp = XYPlotComp(save_plot_per_iteration=True, plot_initial=False, memory=0),
         expected_cost = ec[driver_no]
         )
 
-if 1:
-    tic = time.time()
-    cost, state, recorder = tf.optimize()
-    toc = time.time()
-    print('Optimization with SGD took: {:.0f}s'.format(toc-tic), ' with a total constraint violation of ', recorder['sgd_constraint'][-1])
-    recorder.save(f'{driver_names[driver_no]}')
+tic = time.time()
+cost, state, recorder = tf.optimize()
+toc = time.time()
+print('Optimization with SGD took: {:.0f}s'.format(toc-tic), ' with a total constraint violation of ', recorder['sgd_constraint'][-1])
+recorder.save(f'{driver_names[driver_no]}')
 
