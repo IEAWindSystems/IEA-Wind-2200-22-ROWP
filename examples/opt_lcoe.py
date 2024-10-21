@@ -138,7 +138,7 @@ freqs = site.local_wind(x0, y0, wd=dirs, ws=speeds).P_ilk[0, :, :]     # all fre
 # bathymetry
 X = np.array(system_dat['site']['Bathymetry']['latitude'])
 Y = np.array(system_dat['site']['Bathymetry']['longitude'])
-Z = np.array(system_dat['site']['Bathymetry']['elevation']['data']) 
+Z = np.array(system_dat['site']['Bathymetry']['elevation']['data'])
 
 # Transfer from LongLat to UTM (km)
 X_utm = utm.from_latlon(np.ones(len(Y))*X[0],Y)
@@ -237,7 +237,7 @@ def lcoe_func(x, y, **kwargs):
     npv = (capex*len(x) + np.sum(mp_cost) + LP*len(x)) * CRF + OpexAnnual*len(x)
     lcoe = npv / aep
     #return npv / 1e6
-    return -1 * lcoe / 1e6 # M$/GWh
+    return -1 * lcoe / 1e6 # M$/MWh
 
 def wrap_depth(s): 
     return depth_interp(*np.split(s, 2))
@@ -257,6 +257,12 @@ def lcoe_jac(x, y, **kwargs):
     depths = depth_interp(x, y)
     masses = []
     dmasses = []
+    #outp = open('mass.depth', 'w')
+    #for water_depth in np.linspace(Z.min(), Z.max(), 10):
+    #    mass = CalculateMass(RP=RP, D=D, HTrans=HTrans, HHub_Ratio=HH/D, WaterDepth=-water_depth, WaveHeight=WaveHeight, WavePeriod=WavePeriod, WindSpeed=WindSpeed)[0][0]
+    #    outp.write(str(mass) + ', ' + str(-water_depth) + '\n')
+    #outp.close()
+    #hey
     for water_depth in depths:
        dmasses.append(polynomial_gradients(water_depth))
        masses.append(polynomial(water_depth))
@@ -270,6 +276,7 @@ def lcoe_jac(x, y, **kwargs):
     #d_masses = get_depth_grads(x, y)[:, 0, :].T
     d_masses = (np.array(dmasses) * get_depth_grads(x, y)[:, 0, :].T)
     dnpv = 2.25 * d_masses / 1e6 * CRF 
+    hey
     npv /= 1e6
     dlcoe = (aep * dnpv - daep * npv) / (aep ** 2)
     return -1 * dlcoe
