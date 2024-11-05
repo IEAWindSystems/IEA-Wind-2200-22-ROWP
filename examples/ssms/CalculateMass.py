@@ -51,17 +51,37 @@ def CalculateMass(RP, D, HTrans, HHub_Ratio, WaterDepth, WaveHeight, WavePeriod,
         res.append(np.ndarray.tolist(mass))
     return res
 
-#%% Sample run
-# Inputs
-# rating = 10             # MW
-# D = 198                 # m
-# HH = 145                # m
-# PlatformHeight = 10     # m
-# WaterDepth = 33.77      # m
-# SignificantWaveHeight = 2.52    # m
-# SignificantWavePeriod = 5.45    # s
-# V_ave = 9.924           # m/s
+# #%% Sample run
+# # Inputs
+# turstring = ['IEA-10MW','IEA-15MW','IEA-22MW']
+# RP = [10, 15, 22]             # MW
+# D = [198, 240, 284]                 # m
+# HH = [119, 140, 170]                # m
+# PlatformHeight = [10, 15, 15]     # m
+# WaterDepth = [34]*3      # m
+# SignificantWaveHeight = [2.52]*3    # m
+# SignificantWavePeriod = [5.45]*3    # s
+# V_ave = [9.924]*3           # m/s
 # # Call surrogate
-# mass = CalculateMass(rating,D,PlatformHeight,HH/D,WaterDepth,SignificantWaveHeight,SignificantWavePeriod, V_ave)
-# print(f'Monopile mass: {mass[0][0]:.1f} kg')
-# print(f'Tower mass: {mass[1][0]:.1f} kg')
+# mass = CalculateMass(RP=RP, D=D, HTrans=PlatformHeight, HHub_Ratio=[hh/d for hh, d in zip(HH,D)], WaterDepth=WaterDepth, WaveHeight=SignificantWaveHeight, WavePeriod=SignificantWavePeriod, WindSpeed=V_ave)
+# print(f'Monopile mass: {mass[0][2]:.1f} kg')
+# print(f'Tower mass: {mass[1][2]:.1f} kg')
+
+# #%% Create water depth dependent vector
+# masses = []
+# depths = np.linspace(20,40,num=21)
+# for z in depths:
+#    #masses.append((water_depth))
+#    cur_mass = CalculateMass(RP=RP, D=D, HTrans=PlatformHeight, HHub_Ratio=[hh/d for hh, d in zip(HH,D)], WaterDepth=[z]*len(D), WaveHeight=SignificantWaveHeight, WavePeriod=SignificantWavePeriod, WindSpeed=V_ave)
+#    masses.append(cur_mass[0])
+# masses_norm = np.array(masses) / np.array(masses)[np.array(depths)==34]
+
+# import matplotlib.pyplot as plt
+# fig = plt.figure()
+# ax = fig.gca()
+# for i in range(masses_norm.shape[1]):
+#     ax.plot(depths, masses_norm[:,i], label=turstring[i])  # Set the label for each curve
+# ax.legend()
+# ax.grid(alpha=0.6)
+# ax.set_ylabel('Rel. monopile mass wrt z=34m')
+# ax.set_xlabel('Water depth z [m]')
