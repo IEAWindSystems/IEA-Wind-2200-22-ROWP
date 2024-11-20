@@ -29,12 +29,13 @@ from py_wake.turbulence_models import CrespoHernandez
 from windIO.utils.yml_utils import load_yaml
 from scipy.interpolate import RegularGridInterpolator, interp1d
 from ssms.CalculateMass import CalculateMass
+from ed_win.wind_farm_network import WindFarmNetwork
 np.random.seed(2)
 #
 #%% INPUTS
 # farm layout
 Zone = 'Mid'          # 'North', 'Mid', 'South', 'North+Mid'
-NeighbourFarm = 'North'  # Give respective Zone or set to 'None'
+NeighbourFarm = 'None'  # Give respective Zone or set to 'None'
 tur_nr = 34             # Desired turbine number in optimized farm
 Model = 'gauss'
 
@@ -51,6 +52,9 @@ WindSpeed = 9.924    # m/s ToDo: verfiy it is average wind speed
 capex = 5.5258e7        # $2010 per turbine, excl. Monopile, from DETECT for HKN scaled (22MW turbines)
 OpexAnnual = 1.3564e6   # $2010 per turbine, annual OPEX, from DETECT for HKN scaled (22MW turbines)
 LP = 2.6447e+06         # $2010 per turbine, liquidation proceeds, from DETECT for HKN scaled (22MW turbines)
+#
+# cable data [cross section, capacity, price]
+cables = np.array([[500, 3, 206], [800, 5, 287], [1000, 7, 406]])
 #
 #%% Process neighbour farm (coordinates from foregoing optimization)
 if NeighbourFarm == 'Mid':
@@ -147,6 +151,9 @@ dirs = np.arange(0, 360, 1) #wind directions
 speeds = np.arange(cut_in, cut_out+1, 1) # wind speeds
 freqs = site.local_wind(x0, y0, wd=dirs, ws=speeds).P_ilk[0, :, :]     # all frequencies
 
+Subs_x = system_dat['wind_farm']['electrical_substations']['electrical_substation']['coordinates']['x']
+Subs_y = system_dat['wind_farm']['electrical_substations']['electrical_substation']['coordinates']['y']
+
 # bathymetry
 X = np.array(system_dat['site']['Bathymetry']['latitude'])
 Y = np.array(system_dat['site']['Bathymetry']['longitude'])
@@ -211,17 +218,23 @@ print('Warning: x0 and y0 overwritten.')
 if Zone == 'Mid':
     x0 = [546333.63474559,554920.10151423,549422.85587285,546136.74470996,551339.58169912,552852.58216252,542217.91962822,552563.93138148,548460.45635016,553679.48424965,551240.56269371,543914.55456359,548850.91117952,549236.3384757,551178.87826587,553422.54905415,548133.27423075,547090.46991575,547943.92712465,547786.48566117,553740.83040674,544228.99665126,545129.8804181,540455.63131987,546049.81628749,550456.72983694,548053.10952293,542196.78698654,550261.41313528,539482.53936678,543624.48270107,551115.36789015,541530.89116684,544675.83124295]
     y0 = [5830219.623481509,5831376.711578628,5828114.7643633755,5836695.036029441,5829932.731539264,5827771.895479895,5830249.439991704,5834368.310071459,5839538.126536711,5832958.970977972,5836058.456399757,5828427.682958245,5830686.145856599,5838598.578527443,5827873.383495137,5831044.530321654,5832643.9577727085,5835511.398954034,5837464.337685456,5828187.188584721,5829304.02112439,5830364.057144121,5832401.619418706,5829946.1247157445,5828254.626678088,5833963.653209071,5834407.431636803,5832041.984982793,5837285.254158805,5828782.918614267,5833555.560298287,5831972.252517432,5828629.793272737,5835006.545328568]
+    Sx = Subs_x[1]
+    Sy = Subs_y[1]
 if Zone == 'North':
     x0 = [555462.7815047 , 558192.75454615, 557516.95709109, 551829.25075218, 550906.82672596, 555600.47948374, 558294.64529255, 558932.63025182, 557077.83007341, 556702.56967423, 554081.4810287 , 553136.88029812, 550784.88483612, 559575.0531913 , 559265.67213045, 555157.10127519, 557837.84987992, 552320.39653102, 552444.73170613, 559052.32906201, 553313.24132169, 552566.69671044, 549261.01000065, 558779.94156623, 555127.47952396, 554903.43873529, 553800.68239313, 558477.01382161, 556843.9695099 , 555800.98347535, 556386.59751983, 555546.99726727, 550023.50032033, 554326.91460964]
     y0 = [5841417.144829278, 5842449.350646424, 5838857.727073366, 5843575.869298234, 5838572.66438408, 5832557.501989138, 5851325.744269247, 5850591.631111388, 5836630.666193126, 5834622.1146755405, 5834421.453206649, 5844866.258713254, 5842051.520705445, 5849682.703235188, 5848296.551732236, 5839556.5244619595, 5840686.231288356, 5837875.876761292, 5836553.9026119085, 5846923.457904408, 5835390.807303021, 5840743.531747452, 5840515.480496754, 5845500.254311497, 5837099.082503276, 5833366.378956759, 5843199.386602501, 5843950.981754125, 5849353.568481362, 5843556.2583834445, 5846208.534290497, 5848030.195665719, 5839581.2183083175, 5846580.890253602]
+    Sx = Subs_x[0]
+    Sy = Subs_y[0]
 #%% Objective function
 def lcoe_func(x, y, **kwargs):
+    #
     # 1.) aep
     wd = np.arange(0, 360, 1)
     if nf:
         aep = wake_model(x=np.concatenate((x,x2)), y=np.concatenate((y,y2)), wd=wd, ws=ws, TI=TI).aep().isel(wt=slice(0, tur_nr)).sum().values * 1e3
     else:
         aep = wake_model.aep(x=x, y=y, wd=wd, ws=ws, TI=TI) * 1e3
+    #
     # 2.) monopile costs
     depths = depth_interp(x, y)
     masses = []
@@ -229,9 +242,19 @@ def lcoe_func(x, y, **kwargs):
        masses.append(polynomial(water_depth))
     # Cost function (mass in kg to $2010)
     mp_cost = [x * 2.25 for x in masses]  # from NREL ORBIT
-    # 3.) lcoe
+    #
+    # 3.) Cable costs
+    # initialize
+    wfn = WindFarmNetwork(wt_x=x, wt_y=y, ss_x=Sx, ss_y=Sy, cables=cables)
+    # Optimize cable layout with the given data
+    G = wfn.optimize()
+    # Costs
+    cable_cost = G.cost     # in Euro
+    # !! ToDo: Scale costs to same currency and year of reference
+    #
+    # 4.) lcoe
     CRF = d / (1 - (1 + d) ** -life)
-    npv = (capex*len(x) + np.sum(mp_cost) + LP*len(x)) * CRF + OpexAnnual*len(x)
+    npv = (capex*len(x) + np.sum(mp_cost) + cable_cost + LP*len(x)) * CRF + OpexAnnual*len(x)
     lcoe = npv / aep
     return lcoe # $/MWh
 
@@ -252,10 +275,11 @@ def lcoe_jac(x, y, **kwargs):
     wd = np.arange(0, 360, 1)
     if nf:
         daep = wake_model.aep_gradients(gradient_method=autograd, wrt_arg=['x', 'y'], x=np.concatenate((x,x2)), y=np.concatenate((y,y2)), ws=ws, TI=TI, wd=wd)[:tur_nr,:tur_nr] * 1e3
-        aep = wake_model(x=np.concatenate((x,x2)), y=np.concatenate((y,y2)), wd=wd, ws=ws, TI=TI).aep().isel(wt=slice(0, tur_nr)).sum().values * 1e3
+        aep = wake_model(x=np.concatenate((x,x2)), y=np.concatenate((y,y2)), wd=wd, ws=ws, TI=TI).aep().isel(wt=slice(0, tur_nr)).sum().values * 1e3    # sum(axis=(1, 2))
     else:
         daep = wake_model.aep_gradients(gradient_method=autograd, wrt_arg=['x', 'y'], x=x, y=y, ws=ws, TI=TI, wd=wd) * 1e3
         aep = wake_model.aep(x=x, y=y, wd=wd, ws=ws, TI=TI) * 1e3
+    #
     # 2.) monopile costs
     depths = depth_interp(x, y)
     masses = []
@@ -263,13 +287,23 @@ def lcoe_jac(x, y, **kwargs):
     for water_depth in depths:
        dmasses.append(polynomial_gradients(water_depth))
        masses.append(polynomial(water_depth))
-   # 3.) lcoe
+    mp_cost = 2.25 * np.array(masses)
+    # gradients
+    dmasses = (np.array(dmasses) * get_depth_grads(x, y)[:, 0, :].T)
+    dmp_cost = 2.25 * dmasses
+    #
+    # 3.) Cable costs
+    wfn = WindFarmNetwork(wt_x=x, wt_y=y, ss_x=Sx, ss_y=Sy, cables=cables)
+    # Optimize cable layout with the given data
+    G = wfn.optimize()
+    # Costs
+    cable_cost = G.cost     # in Euro
+    # Gradients
+    _, dcable_cost = wfn.gradient(node_type='wind_turbines')
+    #
+    # 4.) lcoe
     CRF = d / (1 - (1 + d) ** -life)
-    mp_cost = 2.25 * np.array(masses) 
-    npv = (capex * len(x) + sum(mp_cost) + LP*len(x)) * CRF + OpexAnnual*len(x)
-    d_masses = (np.array(dmasses) * get_depth_grads(x, y)[:, 0, :].T)
-    dnpv = 2.25 * d_masses * CRF 
-    dlcoe = (aep * dnpv - daep * npv) / (aep ** 2)
+    dlcoe = (CRF*(dmp_cost+dcable_cost.T)*aep - ((capex*len(x)+LP*len(x)+np.sum(mp_cost)+cable_cost)*CRF+OpexAnnual*len(x))*daep) / (aep ** 2)
     return dlcoe
 
 # Verify gradients
@@ -308,7 +342,7 @@ tf = TopFarmProblem(
         cost_comp = CostModelComponent(input_keys=['x','y'], n_wt=n_wt, cost_function=lcoe_func, objective=True, cost_gradient_function=lcoe_jac, maximize=False),
         constraints = DistanceConstraintAggregation([SpacingConstraint(min_spacing_m), constraint_comp],n_wt, min_spacing_m, windTurbines), 
         driver = EasySGDDriver(maxiter=3000, learning_rate=windTurbines.diameter(), max_time=1008000, gamma_min_factor=0.1, speedupSGD=True, sgd_thresh=0.12),
-        plot_comp = XYPlotCompBathym(save_plot_per_iteration=True, plot_initial=False, memory=0, X=X_utm, Y=Y_utm, Z=Z),
+        plot_comp = XYPlotCompBathym(save_plot_per_iteration=True, plot_initial=False, memory=0, X=X_utm, Y=Y_utm, Z=Z, Sx=Sx, Sy=Sy, cables=cables),
         expected_cost = 1
         )
 #%% Run
