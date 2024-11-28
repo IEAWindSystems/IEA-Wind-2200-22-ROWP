@@ -11,7 +11,7 @@ from openmdao.api import ExplicitComponent
 import matplotlib.pyplot as plt
 import numpy as np
 import topfarm
-from ed_win.wind_farm_network import WindFarmNetwork
+from matplotlib.ticker import FuncFormatter
 
 def mypause(interval):
     # pause without show
@@ -30,7 +30,7 @@ class XYPlotCompBathym(ExplicitComponent):
     # colors = ['b', 'r', 'm', 'c', 'g', 'y', 'orange', 'indigo', 'grey'] * 100
     colors = [c['color'] for c in iter(matplotlib.rcParams['axes.prop_cycle'])] * 100
 
-    def __init__(self, memory=10, delay=0.001, plot_initial=True, plot_improvements_only=False, ax=None, legendloc=1, save_plot_per_iteration=False, X=None, Y=None, Z=None, Sx=None, Sy=None, cables=None):
+    def __init__(self, memory=10, delay=0.001, plot_initial=True, plot_improvements_only=False, ax=None, legendloc=1, save_plot_per_iteration=False, X=None, Y=None, Z=None, Sx=None, Sy=None, cables=None, metrics_recorder=None):
         """Initialize component for plotting turbine locations
 
         Parameters
@@ -66,6 +66,7 @@ class XYPlotCompBathym(ExplicitComponent):
         self.Sx = Sx
         self.Sy = Sy
         self.cables = cables
+        self.metrics_recorder = metrics_recorder
     @property
     def ax(self):
         return self._ax or plt.gca()
@@ -160,13 +161,9 @@ class XYPlotCompBathym(ExplicitComponent):
         self.ax.plot([], [], 'xk', label='Current position')
         
     def plot_cables(self,x,y):
-        wfn = WindFarmNetwork(wt_x=x, wt_y=y, ss_x=self.Sx, ss_y=self.Sy, cables=self.cables)
-        # Optimize cable layout with the given data and postprocess results
-        G = wfn.optimize()
-        cab_data = G.get_table()
-        u = cab_data['u'].tolist()
-        v = cab_data['v'].tolist()
-        con = list(zip([x - 1 for x in v], [x - 1 for x in u], cab_data['cable'].tolist()))
+        u = self.metrics_recorder['cable_u'][-1]
+        v = self.metrics_recorder['cable_v'][-1]
+        con = list(zip([x - 1 for x in v], [x - 1 for x in u], self.metrics_recorder['cable_type'][-1]))
         CabName = ['Cable A=' + str(self.cables[0][0]) + 'mm²','Cable A=' + str(self.cables[1][0]) + 'mm²','Cable A=' + str(self.cables[2][0]) + 'mm²']
         # Plot cabling
         # a) Combine turbine + subsation coordinates
@@ -192,11 +189,16 @@ class XYPlotCompBathym(ExplicitComponent):
             inc_or_exp = self.problem.cost_comp.inc_or_exp
         else:
             inc_or_exp = 1.0
-        title = "%d) %s %f %s" % (rec.num_cases, self.cost_key, cost * inc_or_exp, self.cost_unit)
-        if cost0 != 0:
-            title += " (%+.2f%%)" % ((cost - cost0) / cost0 * 100)
-        self.ax.set_title(title)
-
+        # LCOE
+        title = "Iteration: %d \n LCOE = %.2f $/MWh (%+.2f%%)" % (rec.num_cases, cost * inc_or_exp, (cost - cost0) / cost0 * 100)
+        #AEP
+        title += " \n AEP = %.1f GWh (%+.2f%%)" % (self.metrics_recorder['aep'][-1]/1e3, (self.metrics_recorder['aep'][-1]/1e3 - self.metrics_recorder['aep'][0]/1e3) / (self.metrics_recorder['aep'][0]/1e3) * 100)
+        #Cable Cost
+        title += " \n Cab-Cost = %s $ (%+.2f%%)" % ("{:,.0f}".format(self.metrics_recorder['cable_cost'][-1]), (self.metrics_recorder['cable_cost'][-1] - self.metrics_recorder['cable_cost'][0]) / self.metrics_recorder['cable_cost'][0] * 100)
+        #Monopile Cost
+        title += " \n MP-Cost = %s $ (%+.2f%%)" % ("{:,.0f}".format(self.metrics_recorder['mp_cost'][-1]), (self.metrics_recorder['mp_cost'][-1] - self.metrics_recorder['mp_cost'][0]) / self.metrics_recorder['mp_cost'][0] * 100)
+        self.ax.set_title(title,fontsize=9)
+        
     def get_initial(self):
         rec = self.problem.recorder
         if rec.num_cases > 0:
@@ -250,9 +252,15 @@ class XYPlotCompBathym(ExplicitComponent):
             self.ax.legend(loc=self.legendloc,fontsize=7)
             
             self.ax.grid(alpha=0.6)
-            self.ax.set_ylabel('Northing [m]',fontsize=9)
-            self.ax.set_xlabel('Easting [m]',fontsize=9)
             self.ax.tick_params(axis='both', which='major', labelsize=8)
+            
+            # Format axes to display in kilometers
+            def meters_to_kilometers(x, _):
+                return f'{x / 1000:.0f}'
+            plt.gca().xaxis.set_major_formatter(FuncFormatter(meters_to_kilometers))
+            plt.gca().yaxis.set_major_formatter(FuncFormatter(meters_to_kilometers))
+            self.ax.set_ylabel('Northing [km]',fontsize=9)
+            self.ax.set_xlabel('Easting [km]',fontsize=9)
             
             if self.counter == 0:
                 plt.pause(1e-6)
