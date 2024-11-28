@@ -30,7 +30,8 @@ from windIO.utils.yml_utils import load_yaml
 from scipy.interpolate import RegularGridInterpolator, interp1d
 from ssms.CalculateMass import CalculateMass
 from ed_win.wind_farm_network import WindFarmNetwork
-np.random.seed(2)
+from shapely.geometry import Point, Polygon
+np.random.seed(1)
 #
 #%% INPUTS
 # farm layout
@@ -38,6 +39,7 @@ Zone = 'Mid'          # 'North', 'Mid', 'South', 'North+Mid'
 NeighbourFarm = 'None'  # Give respective Zone or set to 'None'
 tur_nr = 34             # Desired turbine number in optimized farm
 Model = 'gauss'
+plot_convergence = True
 
 # lcoe parameters
 d = 0.05             # [-] discount rate
@@ -213,20 +215,20 @@ polynomial_gradients = np.polyder(polynomial)
 samps = 50    #number of samples 
 site.interp_method = 'linear'
 
-# reduce to desired turbine nr
-print('Warning: x0 and y0 overwritten.')
+# Substation coordinate
 if Zone == 'Mid':
-    x0 = [546333.63474559,554920.10151423,549422.85587285,546136.74470996,551339.58169912,552852.58216252,542217.91962822,552563.93138148,548460.45635016,553679.48424965,551240.56269371,543914.55456359,548850.91117952,549236.3384757,551178.87826587,553422.54905415,548133.27423075,547090.46991575,547943.92712465,547786.48566117,553740.83040674,544228.99665126,545129.8804181,540455.63131987,546049.81628749,550456.72983694,548053.10952293,542196.78698654,550261.41313528,539482.53936678,543624.48270107,551115.36789015,541530.89116684,544675.83124295]
-    y0 = [5830219.623481509,5831376.711578628,5828114.7643633755,5836695.036029441,5829932.731539264,5827771.895479895,5830249.439991704,5834368.310071459,5839538.126536711,5832958.970977972,5836058.456399757,5828427.682958245,5830686.145856599,5838598.578527443,5827873.383495137,5831044.530321654,5832643.9577727085,5835511.398954034,5837464.337685456,5828187.188584721,5829304.02112439,5830364.057144121,5832401.619418706,5829946.1247157445,5828254.626678088,5833963.653209071,5834407.431636803,5832041.984982793,5837285.254158805,5828782.918614267,5833555.560298287,5831972.252517432,5828629.793272737,5835006.545328568]
+#     x0 = [546333.63474559,554920.10151423,549422.85587285,546136.74470996,551339.58169912,552852.58216252,542217.91962822,552563.93138148,548460.45635016,553679.48424965,551240.56269371,543914.55456359,548850.91117952,549236.3384757,551178.87826587,553422.54905415,548133.27423075,547090.46991575,547943.92712465,547786.48566117,553740.83040674,544228.99665126,545129.8804181,540455.63131987,546049.81628749,550456.72983694,548053.10952293,542196.78698654,550261.41313528,539482.53936678,543624.48270107,551115.36789015,541530.89116684,544675.83124295]
+#     y0 = [5830219.623481509,5831376.711578628,5828114.7643633755,5836695.036029441,5829932.731539264,5827771.895479895,5830249.439991704,5834368.310071459,5839538.126536711,5832958.970977972,5836058.456399757,5828427.682958245,5830686.145856599,5838598.578527443,5827873.383495137,5831044.530321654,5832643.9577727085,5835511.398954034,5837464.337685456,5828187.188584721,5829304.02112439,5830364.057144121,5832401.619418706,5829946.1247157445,5828254.626678088,5833963.653209071,5834407.431636803,5832041.984982793,5837285.254158805,5828782.918614267,5833555.560298287,5831972.252517432,5828629.793272737,5835006.545328568]
     Sx = Subs_x[1]
     Sy = Subs_y[1]
 if Zone == 'North':
-    x0 = [555462.7815047 , 558192.75454615, 557516.95709109, 551829.25075218, 550906.82672596, 555600.47948374, 558294.64529255, 558932.63025182, 557077.83007341, 556702.56967423, 554081.4810287 , 553136.88029812, 550784.88483612, 559575.0531913 , 559265.67213045, 555157.10127519, 557837.84987992, 552320.39653102, 552444.73170613, 559052.32906201, 553313.24132169, 552566.69671044, 549261.01000065, 558779.94156623, 555127.47952396, 554903.43873529, 553800.68239313, 558477.01382161, 556843.9695099 , 555800.98347535, 556386.59751983, 555546.99726727, 550023.50032033, 554326.91460964]
-    y0 = [5841417.144829278, 5842449.350646424, 5838857.727073366, 5843575.869298234, 5838572.66438408, 5832557.501989138, 5851325.744269247, 5850591.631111388, 5836630.666193126, 5834622.1146755405, 5834421.453206649, 5844866.258713254, 5842051.520705445, 5849682.703235188, 5848296.551732236, 5839556.5244619595, 5840686.231288356, 5837875.876761292, 5836553.9026119085, 5846923.457904408, 5835390.807303021, 5840743.531747452, 5840515.480496754, 5845500.254311497, 5837099.082503276, 5833366.378956759, 5843199.386602501, 5843950.981754125, 5849353.568481362, 5843556.2583834445, 5846208.534290497, 5848030.195665719, 5839581.2183083175, 5846580.890253602]
+#     x0 = [555462.7815047 , 558192.75454615, 557516.95709109, 551829.25075218, 550906.82672596, 555600.47948374, 558294.64529255, 558932.63025182, 557077.83007341, 556702.56967423, 554081.4810287 , 553136.88029812, 550784.88483612, 559575.0531913 , 559265.67213045, 555157.10127519, 557837.84987992, 552320.39653102, 552444.73170613, 559052.32906201, 553313.24132169, 552566.69671044, 549261.01000065, 558779.94156623, 555127.47952396, 554903.43873529, 553800.68239313, 558477.01382161, 556843.9695099 , 555800.98347535, 556386.59751983, 555546.99726727, 550023.50032033, 554326.91460964]
+#     y0 = [5841417.144829278, 5842449.350646424, 5838857.727073366, 5843575.869298234, 5838572.66438408, 5832557.501989138, 5851325.744269247, 5850591.631111388, 5836630.666193126, 5834622.1146755405, 5834421.453206649, 5844866.258713254, 5842051.520705445, 5849682.703235188, 5848296.551732236, 5839556.5244619595, 5840686.231288356, 5837875.876761292, 5836553.9026119085, 5846923.457904408, 5835390.807303021, 5840743.531747452, 5840515.480496754, 5845500.254311497, 5837099.082503276, 5833366.378956759, 5843199.386602501, 5843950.981754125, 5849353.568481362, 5843556.2583834445, 5846208.534290497, 5848030.195665719, 5839581.2183083175, 5846580.890253602]
     Sx = Subs_x[0]
     Sy = Subs_y[0]
 #%% Objective function
 def lcoe_func(x, y, **kwargs):
+    global metrics_recorder
     #
     # 1.) aep
     wd = np.arange(0, 360, 1)
@@ -256,6 +258,18 @@ def lcoe_func(x, y, **kwargs):
     CRF = d / (1 - (1 + d) ** -life)
     npv = (capex*len(x) + np.sum(mp_cost) + cable_cost + LP*len(x)) * CRF + OpexAnnual*len(x)
     lcoe = npv / aep
+    #
+    # 5. Record the metrics
+    metrics_recorder["iteration"].append(kwargs.get("iteration", len(metrics_recorder["iteration"]) + 1))
+    metrics_recorder["aep"].append(aep)
+    metrics_recorder["mp_cost"].append(sum(mp_cost))
+    metrics_recorder["cable_cost"].append(cable_cost)
+    metrics_recorder["lcoe"].append(lcoe)
+    cab_data = G.get_table()
+    metrics_recorder["cable_u"].append(cab_data['u'].tolist())
+    metrics_recorder["cable_v"].append(cab_data['v'].tolist())
+    metrics_recorder["cable_type"].append(cab_data['cable'].tolist())
+    #
     return lcoe # $/MWh
 
 #%% Objective gradient function
@@ -299,7 +313,7 @@ def lcoe_jac(x, y, **kwargs):
     # Costs
     cable_cost = G.cost     # in Euro
     # Gradients
-    _, dcable_cost = wfn.gradient(node_type='wind_turbines')
+    dcable_length, dcable_cost = wfn.gradient(node_type='wind_turbines')
     #
     # 4.) lcoe
     CRF = d / (1 - (1 + d) ** -life)
@@ -307,16 +321,15 @@ def lcoe_jac(x, y, **kwargs):
     return dlcoe
 
 # Verify gradients
-lcoe = lcoe_func(x0, y0)
-lcoe_grad = lcoe_jac(x0, y0)
-def wrap_lcoe(s): return lcoe_func(*np.split(s, 2))
-grad = fd(wrap_lcoe, 0.000001)(np.append(x0, y0))
-print('difference between fd and analytic grads: ')
-print(grad - np.array(lcoe_grad).flatten())
+# lcoe = lcoe_func(x0, y0)
+# lcoe_grad = lcoe_jac(x0, y0)
+# def wrap_lcoe(s): return lcoe_func(*np.split(s, 2))
+# grad = fd(wrap_lcoe, 0.000001)(np.append(x0, y0))
+# print('difference between fd and analytic grads: ')
+# print(grad - np.array(lcoe_grad).flatten())
 
 #%% Constraints
 # Boundaries and exclusion zones
-n_wt = len(x0)
 b = system_dat['site']
 if Zone == 'North':
     boundary = np.array([b['boundaries']['polygons'][0]['x'], b['boundaries']['polygons'][0]['y']]).T
@@ -336,17 +349,81 @@ else:
 # Min spacing
 min_spacing_m = 2 * windTurbines.diameter()  #minimum inter-turbine spacing in meters
 
+#%% Initial layout
+# random rectangular
+# x0 = np.random.uniform(np.min(boundary[:,0]),np.max(boundary[:,0]),(tur_nr,1)).flatten().tolist()
+# y0 = np.random.uniform(np.min(boundary[:,1]),np.max(boundary[:,1]),(tur_nr,1)).flatten().tolist()
+#
+def random_points_in_polygon(polygon, num_points):
+    points = []
+    min_x, min_y, max_x, max_y = polygon.bounds  # Bounding box of the polygon
+    
+    while len(points) < num_points:
+        # Generate a random point within the bounding box
+        random_point = Point(np.random.uniform(min_x, max_x), np.random.uniform(min_y, max_y))
+        
+        # Check if the point is within the polygon
+        if polygon.contains(random_point):
+            points.append((random_point.x, random_point.y))
+    
+    return points
+
+# Generate random points within polygon
+polygon = Polygon(list(zip(boundary[:,0],boundary[:,1])))
+random_points = random_points_in_polygon(polygon, tur_nr)
+x_coords, y_coords = zip(*random_points)
+x0 = list(x_coords)
+y0 = list(y_coords)
+
+#%% Recorder
+metrics_recorder = {
+    "iteration": [],
+    "aep": [],
+    "mp_cost": [],
+    "cable_cost": [],
+    "lcoe": [],
+    "cable_u": [],
+    "cable_v": [],
+    "cable_type": []
+}
+
 #%% Optimization setup
 tf = TopFarmProblem(
         design_vars = {'x':x0, 'y':y0},         
-        cost_comp = CostModelComponent(input_keys=['x','y'], n_wt=n_wt, cost_function=lcoe_func, objective=True, cost_gradient_function=lcoe_jac, maximize=False),
-        constraints = DistanceConstraintAggregation([SpacingConstraint(min_spacing_m), constraint_comp],n_wt, min_spacing_m, windTurbines), 
+        cost_comp = CostModelComponent(input_keys=['x','y'], n_wt=tur_nr, cost_function=lcoe_func, objective=True, cost_gradient_function=lcoe_jac, maximize=False),
+        constraints = DistanceConstraintAggregation([SpacingConstraint(min_spacing_m), constraint_comp],tur_nr, min_spacing_m, windTurbines), 
         driver = EasySGDDriver(maxiter=3000, learning_rate=windTurbines.diameter(), max_time=1008000, gamma_min_factor=0.1, speedupSGD=True, sgd_thresh=0.12),
-        plot_comp = XYPlotCompBathym(save_plot_per_iteration=True, plot_initial=False, memory=0, X=X_utm, Y=Y_utm, Z=Z, Sx=Sx, Sy=Sy, cables=cables),
+        plot_comp = XYPlotCompBathym(save_plot_per_iteration=True, plot_initial=False, memory=0, X=X_utm, Y=Y_utm, Z=Z, Sx=Sx, Sy=Sy, cables=cables, metrics_recorder=metrics_recorder),
         expected_cost = 1
         )
+
+# SmartStart (work in progress)
+# x = np.linspace(np.min(boundary[0:]),np.max(boundary[0:]),20)
+# y = np.linspace(np.min(boundary[1:]),np.max(boundary[1:]),20)
+# YY, XX = np.meshgrid(y, x)
+# tf.smart_start(XX, YY, tf.cost_comp.get_aep4smart_start())
+
 #%% Run
 tic = time.time()
 cost, state, recorder = tf.optimize()
 toc = time.time()
 print('Optimization with SGD took: {:.0f}s'.format(toc-tic), ' with a total constraint violation of ', recorder['sgd_constraint'][-1])
+
+#%% Plot history
+if plot_convergence:
+    plt.figure(figsize=(5, 3))
+    plt.plot(np.arange(metrics_recorder['iteration'][-1]), [(x - metrics_recorder['lcoe'][0]) / metrics_recorder['lcoe'][0] * 100 for x in metrics_recorder['lcoe']], label='lcoe', linewidth = 1)
+    plt.plot(np.arange(metrics_recorder['iteration'][-1]), [(x - metrics_recorder['aep'][0]) / metrics_recorder['aep'][0] * 100 for x in metrics_recorder['aep']], label='aep', linewidth = 1)
+    plt.plot(np.arange(metrics_recorder['iteration'][-1]), [(x - metrics_recorder['cable_cost'][0]) / metrics_recorder['cable_cost'][0] * 100 for x in metrics_recorder['cable_cost']], label='cable cost',linewidth = 1)
+    plt.plot(np.arange(metrics_recorder['iteration'][-1]), [(x - metrics_recorder['mp_cost'][0]) / metrics_recorder['mp_cost'][0] * 100 for x in metrics_recorder['mp_cost']], label='monopile cost',linewidth = 1)
+    plt.legend(fontsize=7)
+    plt.grid()
+    plt.xlabel('Iteration',fontsize=6)
+    plt.ylabel('Rel. Diff. wrt baseline (%)',fontsize=6)
+    plt.title('Convergence behaviour',fontsize=7)
+    plt.xticks(fontsize=6)
+    plt.yticks(fontsize=6)
+    # Save to a file
+    import pickle
+    with open("data.pkl", "wb") as file:
+        pickle.dump(metrics_recorder, file)
