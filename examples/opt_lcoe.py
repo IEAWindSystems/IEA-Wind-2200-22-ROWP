@@ -31,6 +31,7 @@ from scipy.interpolate import RegularGridInterpolator, interp1d
 from ssms.CalculateMass import CalculateMass
 from ed_win.wind_farm_network import WindFarmNetwork
 from shapely.geometry import Point, Polygon
+from topfarm.constraint_components.boundary import MultiWFPolygonBoundaryConstraint
 np.random.seed(1)
 #
 #%% INPUTS
@@ -122,8 +123,8 @@ else:
    TI = resource_dat['wind_resource']['turbulence_intensity']['data']
 
 # get initial x and y positions
-x0 = farm_dat['layouts']['initial_layout']['coordinates']['x']
-y0 = farm_dat['layouts']['initial_layout']['coordinates']['y']
+#x0 = farm_dat['layouts']['initial_layout']['coordinates']['x']
+#y0 = farm_dat['layouts']['initial_layout']['coordinates']['y']
 
 # define turbine
 hh = farm_dat['turbines']['hub_height']
@@ -151,7 +152,7 @@ elif Model == 'gauss':
 # wind resource
 dirs = np.arange(0, 360, 1) #wind directions
 speeds = np.arange(cut_in, cut_out+1, 1) # wind speeds
-freqs = site.local_wind(x0, y0, wd=dirs, ws=speeds).P_ilk[0, :, :]     # all frequencies
+freqs = site.local_wind([0], [0], wd=dirs, ws=speeds).P_ilk[0, :, :]     # all frequencies
 
 Subs_x = system_dat['wind_farm']['electrical_substations']['electrical_substation']['coordinates']['x']
 Subs_y = system_dat['wind_farm']['electrical_substations']['electrical_substation']['coordinates']['y']
@@ -233,7 +234,7 @@ def lcoe_func(x, y, **kwargs):
     # 1.) aep
     wd = np.arange(0, 360, 1)
     if nf:
-        aep = wake_model(x=np.concatenate((x,x2)), y=np.concatenate((y,y2)), wd=wd, ws=ws, TI=TI).aep().isel(wt=slice(0, tur_nr)).sum().values * 1e3
+        aep = wake_model(x=np.concatenate((x,x2)), y=np.concatenate((y,y2)), wd=wd, ws=ws, TI=TI).aep().isel(wt=slice(0, 3 * tur_nr)).sum().values * 1e3
     else:
         aep = wake_model.aep(x=x, y=y, wd=wd, ws=ws, TI=TI) * 1e3
     #
@@ -287,12 +288,12 @@ def get_depth_grads(x, y):
 def lcoe_jac(x, y, **kwargs):
     # 1.) aep
     wd = np.arange(0, 360, 1)
-    if nf:
-        daep = wake_model.aep_gradients(gradient_method=autograd, wrt_arg=['x', 'y'], x=np.concatenate((x,x2)), y=np.concatenate((y,y2)), ws=ws, TI=TI, wd=wd)[:tur_nr,:tur_nr] * 1e3
-        aep = wake_model(x=np.concatenate((x,x2)), y=np.concatenate((y,y2)), wd=wd, ws=ws, TI=TI).aep().isel(wt=slice(0, tur_nr)).sum().values * 1e3    # sum(axis=(1, 2))
-    else:
-        daep = wake_model.aep_gradients(gradient_method=autograd, wrt_arg=['x', 'y'], x=x, y=y, ws=ws, TI=TI, wd=wd) * 1e3
-        aep = wake_model.aep(x=x, y=y, wd=wd, ws=ws, TI=TI) * 1e3
+    #if nf:
+    #    daep = wake_model.aep_gradients(gradient_method=autograd, wrt_arg=['x', 'y'], x=np.concatenate((x,x2)), y=np.concatenate((y,y2)), ws=ws, TI=TI, wd=wd)[:tur_nr,:tur_nr] * 1e3
+    #    aep = wake_model(x=np.concatenate((x,x2)), y=np.concatenate((y,y2)), wd=wd, ws=ws, TI=TI).aep().isel(wt=slice(0, 3 * tur_nr)).sum().values * 1e3    # sum(axis=(1, 2))
+    #else:
+    daep = wake_model.aep_gradients(gradient_method=autograd, wrt_arg=['x', 'y'], x=x, y=y, ws=ws, TI=TI, wd=wd) * 1e3
+    aep = wake_model.aep(x=x, y=y, wd=wd, ws=ws, TI=TI) * 1e3
     #
     # 2.) monopile costs
     depths = depth_interp(x, y)
@@ -331,21 +332,12 @@ def lcoe_jac(x, y, **kwargs):
 #%% Constraints
 # Boundaries and exclusion zones
 b = system_dat['site']
-if Zone == 'North':
-    boundary = np.array([b['boundaries']['polygons'][0]['x'], b['boundaries']['polygons'][0]['y']]).T
-elif Zone == 'Mid':
-    boundary = np.array([b['boundaries']['polygons'][1]['x'], b['boundaries']['polygons'][1]['y']]).T
-elif Zone == 'South':
-    boundary = np.array([b['boundaries']['polygons'][2]['x'], b['boundaries']['polygons'][2]['y']]).T
-elif Zone == 'North+Mid':
-    boundary1 = np.array([b['boundaries']['polygons'][0]['x'], b['boundaries']['polygons'][0]['y']]).T
-    boundary2 = np.array([b['boundaries']['polygons'][1]['x'], b['boundaries']['polygons'][1]['y']]).T
-    boundary = np.vstack((boundary1,boundary2[1],boundary2[0],boundary2[-1],boundary2[2]))
-    exzone = [np.vstack((boundary1[0],boundary1[-1],boundary2[1:3]))]
-if 'exzone' in locals():
-    constraint_comp = XYBoundaryConstraint([InclusionZone(boundary), ExclusionZone(exzone[0])], 'multi_polygon')
-else:
-    constraint_comp = XYBoundaryConstraint([InclusionZone(boundary)], 'multi_polygon')
+north_boundary = np.array([b['boundaries']['polygons'][0]['x'], b['boundaries']['polygons'][0]['y']]).T
+mid_boundary = np.array([b['boundaries']['polygons'][1]['x'], b['boundaries']['polygons'][1]['y']]).T
+south_boundary = np.array([b['boundaries']['polygons'][2]['x'], b['boundaries']['polygons'][2]['y']]).T
+
+
+
 # Min spacing
 min_spacing_m = 2 * windTurbines.diameter()  #minimum inter-turbine spacing in meters
 
@@ -354,11 +346,11 @@ min_spacing_m = 2 * windTurbines.diameter()  #minimum inter-turbine spacing in m
 # x0 = np.random.uniform(np.min(boundary[:,0]),np.max(boundary[:,0]),(tur_nr,1)).flatten().tolist()
 # y0 = np.random.uniform(np.min(boundary[:,1]),np.max(boundary[:,1]),(tur_nr,1)).flatten().tolist()
 #
-def random_points_in_polygon(polygon, num_points):
+def random_points_in_polygon(polygon, tur_nr):
     points = []
     min_x, min_y, max_x, max_y = polygon.bounds  # Bounding box of the polygon
     
-    while len(points) < num_points:
+    while len(points) < tur_nr:
         # Generate a random point within the bounding box
         random_point = Point(np.random.uniform(min_x, max_x), np.random.uniform(min_y, max_y))
         
@@ -369,11 +361,20 @@ def random_points_in_polygon(polygon, num_points):
     return points
 
 # Generate random points within polygon
-polygon = Polygon(list(zip(boundary[:,0],boundary[:,1])))
-random_points = random_points_in_polygon(polygon, tur_nr)
-x_coords, y_coords = zip(*random_points)
-x0 = list(x_coords)
-y0 = list(y_coords)
+polygon_north = Polygon(list(zip(north_boundary[:,0], north_boundary[:,1])))
+polygon_middle = Polygon(list(zip(mid_boundary[:,0], mid_boundary[:,1])))
+polygon_south = Polygon(list(zip(south_boundary[:,0], south_boundary[:,1])))
+points_n = random_points_in_polygon(polygon_north, tur_nr)
+points_m = random_points_in_polygon(polygon_middle, tur_nr)
+points_s = random_points_in_polygon(polygon_south, tur_nr)
+x0 = np.append(np.array(points_n).T[0], np.append(np.array(points_m).T[0], np.array(points_s).T[0]))
+y0 = np.append(np.array(points_n).T[1], np.append(np.array(points_m).T[1], np.array(points_s).T[1]))
+
+joint_boundaries = MultiWFPolygonBoundaryConstraint({0: north_boundary, 1: mid_boundary, 2: south_boundary}, turbine_groups={0: np.arange(tur_nr), 1: np.arange(tur_nr, 2 * tur_nr), 2: np.arange(2 * tur_nr, 3 * tur_nr)})
+
+#x_coords, y_coords = zip(*random_points)
+#x0 = list(x_coords)
+#y0 = list(y_coords)
 
 #%% Recorder
 metrics_recorder = {
@@ -390,11 +391,12 @@ metrics_recorder = {
 #%% Optimization setup
 tf = TopFarmProblem(
         design_vars = {'x':x0, 'y':y0},         
-        cost_comp = CostModelComponent(input_keys=['x','y'], n_wt=tur_nr, cost_function=lcoe_func, objective=True, cost_gradient_function=lcoe_jac, maximize=False),
-        constraints = DistanceConstraintAggregation([SpacingConstraint(min_spacing_m), constraint_comp],tur_nr, min_spacing_m, windTurbines), 
+        cost_comp = CostModelComponent(input_keys=['x','y'], n_wt=3 * tur_nr, cost_function=lcoe_func, objective=True, cost_gradient_function=lcoe_jac, maximize=False),
+        constraints = DistanceConstraintAggregation([SpacingConstraint(min_spacing_m), joint_boundaries], 3 * tur_nr, min_spacing_m, windTurbines), 
+        #constraints = DistanceConstraintAggregation([SpacingConstraint(min_spacing_m), constraint_comp],tur_nr, min_spacing_m, windTurbines), 
         driver = EasySGDDriver(maxiter=3000, learning_rate=windTurbines.diameter(), max_time=1008000, gamma_min_factor=0.1, speedupSGD=True, sgd_thresh=0.12),
         plot_comp = XYPlotCompBathym(save_plot_per_iteration=True, plot_initial=False, memory=0, X=X_utm, Y=Y_utm, Z=Z, Sx=Sx, Sy=Sy, cables=cables, metrics_recorder=metrics_recorder),
-        expected_cost = 1
+       # expected_cost = 1
         )
 
 # SmartStart (work in progress)
