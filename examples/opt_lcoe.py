@@ -32,11 +32,12 @@ from ssms.CalculateMass import CalculateMass
 from ed_win.wind_farm_network import WindFarmNetwork
 from shapely.geometry import Point, Polygon
 from topfarm.constraint_components.boundary import MultiWFPolygonBoundaryConstraint
-np.random.seed(1)
+np.random.seed(2)
 #
 #%% INPUTS
 # farm layout
-Zone = 'Mid'          # 'North', 'Mid', 'South', 'North+Mid'
+Zone = 'All'            # 'North', 'Mid', 'South', 'All'
+SepCabling = True       # Indicate if cabling is only allowed within each zone or cross-zonal
 NeighbourFarm = 'None'  # Give respective Zone or set to 'None'
 tur_nr = 34             # Desired turbine number in optimized farm
 Model = 'gauss'
@@ -217,60 +218,130 @@ samps = 50    #number of samples
 site.interp_method = 'linear'
 
 # Substation coordinate
-if Zone == 'Mid':
-#     x0 = [546333.63474559,554920.10151423,549422.85587285,546136.74470996,551339.58169912,552852.58216252,542217.91962822,552563.93138148,548460.45635016,553679.48424965,551240.56269371,543914.55456359,548850.91117952,549236.3384757,551178.87826587,553422.54905415,548133.27423075,547090.46991575,547943.92712465,547786.48566117,553740.83040674,544228.99665126,545129.8804181,540455.63131987,546049.81628749,550456.72983694,548053.10952293,542196.78698654,550261.41313528,539482.53936678,543624.48270107,551115.36789015,541530.89116684,544675.83124295]
-#     y0 = [5830219.623481509,5831376.711578628,5828114.7643633755,5836695.036029441,5829932.731539264,5827771.895479895,5830249.439991704,5834368.310071459,5839538.126536711,5832958.970977972,5836058.456399757,5828427.682958245,5830686.145856599,5838598.578527443,5827873.383495137,5831044.530321654,5832643.9577727085,5835511.398954034,5837464.337685456,5828187.188584721,5829304.02112439,5830364.057144121,5832401.619418706,5829946.1247157445,5828254.626678088,5833963.653209071,5834407.431636803,5832041.984982793,5837285.254158805,5828782.918614267,5833555.560298287,5831972.252517432,5828629.793272737,5835006.545328568]
-    Sx = Subs_x[1]
-    Sy = Subs_y[1]
-if Zone == 'North':
-#     x0 = [555462.7815047 , 558192.75454615, 557516.95709109, 551829.25075218, 550906.82672596, 555600.47948374, 558294.64529255, 558932.63025182, 557077.83007341, 556702.56967423, 554081.4810287 , 553136.88029812, 550784.88483612, 559575.0531913 , 559265.67213045, 555157.10127519, 557837.84987992, 552320.39653102, 552444.73170613, 559052.32906201, 553313.24132169, 552566.69671044, 549261.01000065, 558779.94156623, 555127.47952396, 554903.43873529, 553800.68239313, 558477.01382161, 556843.9695099 , 555800.98347535, 556386.59751983, 555546.99726727, 550023.50032033, 554326.91460964]
-#     y0 = [5841417.144829278, 5842449.350646424, 5838857.727073366, 5843575.869298234, 5838572.66438408, 5832557.501989138, 5851325.744269247, 5850591.631111388, 5836630.666193126, 5834622.1146755405, 5834421.453206649, 5844866.258713254, 5842051.520705445, 5849682.703235188, 5848296.551732236, 5839556.5244619595, 5840686.231288356, 5837875.876761292, 5836553.9026119085, 5846923.457904408, 5835390.807303021, 5840743.531747452, 5840515.480496754, 5845500.254311497, 5837099.082503276, 5833366.378956759, 5843199.386602501, 5843950.981754125, 5849353.568481362, 5843556.2583834445, 5846208.534290497, 5848030.195665719, 5839581.2183083175, 5846580.890253602]
-    Sx = Subs_x[0]
-    Sy = Subs_y[0]
+# if Zone == 'Mid':
+# #     x0 = [546333.63474559,554920.10151423,549422.85587285,546136.74470996,551339.58169912,552852.58216252,542217.91962822,552563.93138148,548460.45635016,553679.48424965,551240.56269371,543914.55456359,548850.91117952,549236.3384757,551178.87826587,553422.54905415,548133.27423075,547090.46991575,547943.92712465,547786.48566117,553740.83040674,544228.99665126,545129.8804181,540455.63131987,546049.81628749,550456.72983694,548053.10952293,542196.78698654,550261.41313528,539482.53936678,543624.48270107,551115.36789015,541530.89116684,544675.83124295]
+# #     y0 = [5830219.623481509,5831376.711578628,5828114.7643633755,5836695.036029441,5829932.731539264,5827771.895479895,5830249.439991704,5834368.310071459,5839538.126536711,5832958.970977972,5836058.456399757,5828427.682958245,5830686.145856599,5838598.578527443,5827873.383495137,5831044.530321654,5832643.9577727085,5835511.398954034,5837464.337685456,5828187.188584721,5829304.02112439,5830364.057144121,5832401.619418706,5829946.1247157445,5828254.626678088,5833963.653209071,5834407.431636803,5832041.984982793,5837285.254158805,5828782.918614267,5833555.560298287,5831972.252517432,5828629.793272737,5835006.545328568]
+#     Sx = Subs_x[1]
+#     Sy = Subs_y[1]
+# if Zone == 'North':
+# #     x0 = [555462.7815047 , 558192.75454615, 557516.95709109, 551829.25075218, 550906.82672596, 555600.47948374, 558294.64529255, 558932.63025182, 557077.83007341, 556702.56967423, 554081.4810287 , 553136.88029812, 550784.88483612, 559575.0531913 , 559265.67213045, 555157.10127519, 557837.84987992, 552320.39653102, 552444.73170613, 559052.32906201, 553313.24132169, 552566.69671044, 549261.01000065, 558779.94156623, 555127.47952396, 554903.43873529, 553800.68239313, 558477.01382161, 556843.9695099 , 555800.98347535, 556386.59751983, 555546.99726727, 550023.50032033, 554326.91460964]
+# #     y0 = [5841417.144829278, 5842449.350646424, 5838857.727073366, 5843575.869298234, 5838572.66438408, 5832557.501989138, 5851325.744269247, 5850591.631111388, 5836630.666193126, 5834622.1146755405, 5834421.453206649, 5844866.258713254, 5842051.520705445, 5849682.703235188, 5848296.551732236, 5839556.5244619595, 5840686.231288356, 5837875.876761292, 5836553.9026119085, 5846923.457904408, 5835390.807303021, 5840743.531747452, 5840515.480496754, 5845500.254311497, 5837099.082503276, 5833366.378956759, 5843199.386602501, 5843950.981754125, 5849353.568481362, 5843556.2583834445, 5846208.534290497, 5848030.195665719, 5839581.2183083175, 5846580.890253602]
+#     Sx = Subs_x[0]
+#     Sy = Subs_y[0]
+Sx = Subs_x
+Sy = Subs_y
 #%% Objective function
+aep = None
+dcable_cost = None
 def lcoe_func(x, y, **kwargs):
-    global metrics_recorder
+    global metrics_recorder, aep, cable_cost, dcable_cost, mp_cost, dmp_cost
     #
     # 1.) aep
     wd = np.arange(0, 360, 1)
     if nf:
         aep = wake_model(x=np.concatenate((x,x2)), y=np.concatenate((y,y2)), wd=wd, ws=ws, TI=TI).aep().isel(wt=slice(0, 3 * tur_nr)).sum().values * 1e3
     else:
-        aep = wake_model.aep(x=x, y=y, wd=wd, ws=ws, TI=TI) * 1e3
+        aep = wake_model(x=x, y=y, wd=wd, ws=ws, TI=TI).aep() * 1e3
     #
     # 2.) monopile costs
     depths = depth_interp(x, y)
     masses = []
+    dmasses = []
     for water_depth in depths:
+       dmasses.append(polynomial_gradients(water_depth))
        masses.append(polynomial(water_depth))
-    # Cost function (mass in kg to $2010)
-    mp_cost = [x * 2.25 for x in masses]  # from NREL ORBIT
+    mp_cost = 2.25 * np.array(masses)
+    # gradients (for function later, to avoid double calculus)
+    dmasses = (np.array(dmasses) * get_depth_grads(x, y)[:, 0, :].T)
+    dmp_cost = 2.25 * dmasses
     #
     # 3.) Cable costs
     # initialize
-    wfn = WindFarmNetwork(wt_x=x, wt_y=y, ss_x=Sx, ss_y=Sy, cables=cables)
-    # Optimize cable layout with the given data
-    G = wfn.optimize()
-    # Costs
-    cable_cost = G.cost     # in Euro
+    if SepCabling:
+        xc1 = x[:tur_nr]
+        xc2 = x[tur_nr:2*tur_nr]
+        xc3 = x[2*tur_nr:]
+        yc1 = y[:tur_nr]
+        yc2 = y[tur_nr:2*tur_nr]
+        yc3 = y[2*tur_nr:]
+        wfn1 = WindFarmNetwork(wt_x=xc1, wt_y=yc1, ss_x=Sx[0], ss_y=Sy[0], cables=cables)
+        wfn2 = WindFarmNetwork(wt_x=xc2, wt_y=yc2, ss_x=Sx[1], ss_y=Sy[1], cables=cables)
+        wfn3 = WindFarmNetwork(wt_x=xc3, wt_y=yc3, ss_x=Sx[2], ss_y=Sy[2], cables=cables)
+        G1 = wfn1.optimize()
+        G2 = wfn2.optimize()
+        G3 = wfn3.optimize()
+        cable_cost = G1.cost + G2.cost + G3.cost     # in Euro
+        # for recorder
+        cab_data1 = G1.get_table()
+        cab_data2 = G2.get_table()
+        cab_data3 = G3.get_table()
+        metrics_recorder["cable_u"].append([x+len(Sx)-1 if x != 1 else x for x in cab_data1['u'].tolist()] + [x+len(Sx)-1+tur_nr if x != 1 else x+1 for x in cab_data2['u'].tolist()] + [x+len(Sx)-1+tur_nr*2 if x != 1 else x+2 for x in cab_data3['u'].tolist()])
+        metrics_recorder["cable_v"].append([y+len(Sx)-1 if y != 1 else y for y in cab_data1['v'].tolist()] + [y+len(Sx)-1+tur_nr if y != 1 else y++1 for y in cab_data2['v'].tolist()] + [y+len(Sx)-1+tur_nr*2 if y != 1 else y+2 for y in cab_data3['v'].tolist()])
+        metrics_recorder["cable_type"].append(cab_data1['cable'].tolist() + cab_data2['cable'].tolist() + cab_data3['cable'].tolist())
+        # gradients (for function later, to avoid double calculus)
+        dcable_length1, dcable_cost1 = wfn1.gradient(node_type='wind_turbines')
+        dcable_length2, dcable_cost2 = wfn2.gradient(node_type='wind_turbines')
+        dcable_length3, dcable_cost3 = wfn3.gradient(node_type='wind_turbines')
+        # dcabel_length = np.vstack((dcable_length1,dcable_length2,dcable_length3))
+        dcable_cost = np.vstack((dcable_cost1,dcable_cost2,dcable_cost3))
+    else:
+        wfn = WindFarmNetwork(wt_x=x, wt_y=y, ss_x=Sx, ss_y=Sy, cables=cables)
+        # Optimize cable layout with the given data
+        G = wfn.optimize()
+        # Costs
+        cable_cost = G.cost     # in Euro
+        # for recorder
+        cab_data = G.get_table()
+        metrics_recorder["cable_u"].append(cab_data['u'].tolist())
+        metrics_recorder["cable_v"].append(cab_data['v'].tolist())
+        metrics_recorder["cable_type"].append(cab_data['cable'].tolist())
+        # gradients (for function later, to avoid double calculus)
+        dcable_length, dcable_cost = wfn.gradient(node_type='wind_turbines')
     # !! ToDo: Scale costs to same currency and year of reference
     #
     # 4.) lcoe
     CRF = d / (1 - (1 + d) ** -life)
     npv = (capex*len(x) + np.sum(mp_cost) + cable_cost + LP*len(x)) * CRF + OpexAnnual*len(x)
-    lcoe = npv / aep
+    lcoe = npv / np.sum(aep).item()
     #
-    # 5. Record the metrics
+    # 5. Record the missing metrics
     metrics_recorder["iteration"].append(kwargs.get("iteration", len(metrics_recorder["iteration"]) + 1))
-    metrics_recorder["aep"].append(aep)
+    metrics_recorder["aep"].append(np.sum(aep).item())
     metrics_recorder["mp_cost"].append(sum(mp_cost))
     metrics_recorder["cable_cost"].append(cable_cost)
     metrics_recorder["lcoe"].append(lcoe)
-    cab_data = G.get_table()
-    metrics_recorder["cable_u"].append(cab_data['u'].tolist())
-    metrics_recorder["cable_v"].append(cab_data['v'].tolist())
-    metrics_recorder["cable_type"].append(cab_data['cable'].tolist())
-    #
+    # performance of individual zones
+    if SepCabling:
+        # store the values of the individual zones
+        mp_cost1 = np.sum(mp_cost[:tur_nr])
+        mp_cost2 = np.sum(mp_cost[tur_nr:tur_nr*2])
+        mp_cost3 = np.sum(mp_cost[tur_nr*2:])
+        cable_cost1 = G1.cost
+        cable_cost2 = G2.cost 
+        cable_cost3 = G3.cost
+        npv1 = (capex*tur_nr + mp_cost1 + cable_cost1 + LP*tur_nr) * CRF + OpexAnnual*tur_nr
+        npv2 = (capex*tur_nr + mp_cost2 + cable_cost2 + LP*tur_nr) * CRF + OpexAnnual*tur_nr
+        npv3 = (capex*tur_nr + mp_cost3 + cable_cost3 + LP*tur_nr) * CRF + OpexAnnual*tur_nr
+        aep1 = aep.isel(wt=slice(0,tur_nr)).sum().item()
+        aep2 = aep.isel(wt=slice(tur_nr,2*tur_nr)).sum().item()
+        aep3 = aep.isel(wt=slice(2*tur_nr,None)).sum().item()
+        lcoe1 = npv1 / aep1
+        lcoe2 = npv2 / aep2
+        lcoe3 = npv3 / aep3
+        metrics_recorder["aep1"].append(aep1)
+        metrics_recorder["aep2"].append(aep2)
+        metrics_recorder["aep3"].append(aep3)
+        metrics_recorder["cable_cost1"].append(cable_cost1)
+        metrics_recorder["cable_cost2"].append(cable_cost2)
+        metrics_recorder["cable_cost3"].append(cable_cost3)
+        metrics_recorder["mp_cost1"].append(mp_cost1)
+        metrics_recorder["mp_cost2"].append(mp_cost2)
+        metrics_recorder["mp_cost3"].append(mp_cost3)
+        metrics_recorder["lcoe1"].append(lcoe1)
+        metrics_recorder["lcoe2"].append(lcoe2)
+        metrics_recorder["lcoe3"].append(lcoe3)
+    # for global variable
+    aep = np.sum(aep).item()
     return lcoe # $/MWh
 
 #%% Objective gradient function
@@ -286,6 +357,7 @@ def get_depth_grads(x, y):
     return np.array(grads)
 
 def lcoe_jac(x, y, **kwargs):
+    global aep, cable_cost, dcable_cost, mp_cost, dmp_cost
     # 1.) aep
     wd = np.arange(0, 360, 1)
     #if nf:
@@ -293,28 +365,12 @@ def lcoe_jac(x, y, **kwargs):
     #    aep = wake_model(x=np.concatenate((x,x2)), y=np.concatenate((y,y2)), wd=wd, ws=ws, TI=TI).aep().isel(wt=slice(0, 3 * tur_nr)).sum().values * 1e3    # sum(axis=(1, 2))
     #else:
     daep = wake_model.aep_gradients(gradient_method=autograd, wrt_arg=['x', 'y'], x=x, y=y, ws=ws, TI=TI, wd=wd) * 1e3
-    aep = wake_model.aep(x=x, y=y, wd=wd, ws=ws, TI=TI) * 1e3
     #
     # 2.) monopile costs
-    depths = depth_interp(x, y)
-    masses = []
-    dmasses = []
-    for water_depth in depths:
-       dmasses.append(polynomial_gradients(water_depth))
-       masses.append(polynomial(water_depth))
-    mp_cost = 2.25 * np.array(masses)
-    # gradients
-    dmasses = (np.array(dmasses) * get_depth_grads(x, y)[:, 0, :].T)
-    dmp_cost = 2.25 * dmasses
+    # have been calculated earlier (global variable)
     #
     # 3.) Cable costs
-    wfn = WindFarmNetwork(wt_x=x, wt_y=y, ss_x=Sx, ss_y=Sy, cables=cables)
-    # Optimize cable layout with the given data
-    G = wfn.optimize()
-    # Costs
-    cable_cost = G.cost     # in Euro
-    # Gradients
-    dcable_length, dcable_cost = wfn.gradient(node_type='wind_turbines')
+    # have been calculated earlier (global variable)
     #
     # 4.) lcoe
     CRF = d / (1 - (1 + d) ** -life)
@@ -335,8 +391,6 @@ b = system_dat['site']
 north_boundary = np.array([b['boundaries']['polygons'][0]['x'], b['boundaries']['polygons'][0]['y']]).T
 mid_boundary = np.array([b['boundaries']['polygons'][1]['x'], b['boundaries']['polygons'][1]['y']]).T
 south_boundary = np.array([b['boundaries']['polygons'][2]['x'], b['boundaries']['polygons'][2]['y']]).T
-
-
 
 # Min spacing
 min_spacing_m = 2 * windTurbines.diameter()  #minimum inter-turbine spacing in meters
@@ -385,7 +439,19 @@ metrics_recorder = {
     "lcoe": [],
     "cable_u": [],
     "cable_v": [],
-    "cable_type": []
+    "cable_type": [],
+    "aep1": [],
+    "aep2": [],
+    "aep3": [],
+    "mp_cost1": [],
+    "mp_cost2": [],
+    "mp_cost3": [],
+    "cable_cost1": [],
+    "cable_cost2": [],
+    "cable_cost3": [],
+    "lcoe1": [],
+    "lcoe2": [],
+    "lcoe3": []
 }
 
 #%% Optimization setup

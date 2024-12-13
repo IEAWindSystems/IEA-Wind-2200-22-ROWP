@@ -128,7 +128,8 @@ class XYPlotCompBathym(ExplicitComponent):
     def plot_constraints(self):
         for constr in self.problem.model.constraint_components:
             constr.plot(self.ax)
-
+            for line in self.ax.get_lines():
+                line.set_label('_nolegend_')
     def plot_history(self, x, y):
         rec = self.problem.recorder
         if rec.num_cases > 0:
@@ -167,8 +168,8 @@ class XYPlotCompBathym(ExplicitComponent):
         CabName = ['Cable A=' + str(self.cables[0][0]) + 'mm²','Cable A=' + str(self.cables[1][0]) + 'mm²','Cable A=' + str(self.cables[2][0]) + 'mm²']
         # Plot cabling
         # a) Combine turbine + subsation coordinates
-        AllX = [self.Sx] + x.tolist()
-        AllY = [self.Sy] + y.tolist()
+        AllX = self.Sx + x.tolist()
+        AllY = self.Sy + y.tolist()
         # b) helper for plot
         lw = [0.5,1,1.7]    # line width of different cable types
         plot2 = 0           # helper to plot legend of cable types only once
@@ -249,7 +250,7 @@ class XYPlotCompBathym(ExplicitComponent):
             self.plot_cables(x,y)
             self.plot_current_position(x, y)
             self.set_title(cost0, cost)
-            self.ax.legend(loc=self.legendloc,fontsize=7)
+            self.ax.legend(loc='upper left',fontsize=7)
             
             self.ax.grid(alpha=0.6)
             self.ax.tick_params(axis='both', which='major', labelsize=8)
@@ -261,11 +262,13 @@ class XYPlotCompBathym(ExplicitComponent):
             plt.gca().yaxis.set_major_formatter(FuncFormatter(meters_to_kilometers))
             self.ax.set_ylabel('Northing [km]',fontsize=9)
             self.ax.set_xlabel('Easting [km]',fontsize=9)
+            self.ax.set_xlim([534700,561000])
+            self.ax.set_ylim([5813500,5852500])
             
             if self.counter == 0:
                 plt.pause(1e-6)
             mypause(self.delay)
-
+            
             self.counter += 1
             outputs['plot_counter'] = self.counter
 
