@@ -30,7 +30,7 @@ class XYPlotCompBathym(ExplicitComponent):
     # colors = ['b', 'r', 'm', 'c', 'g', 'y', 'orange', 'indigo', 'grey'] * 100
     colors = [c['color'] for c in iter(matplotlib.rcParams['axes.prop_cycle'])] * 100
 
-    def __init__(self, memory=10, delay=0.001, plot_initial=True, plot_improvements_only=False, ax=None, legendloc=1, save_plot_per_iteration=False, X=None, Y=None, Z=None, Sx=None, Sy=None, cables=None, metrics_recorder=None):
+    def __init__(self, memory=10, delay=0.001, plot_initial=True, plot_improvements_only=False, ax=None, legendloc=1, save_plot_per_iteration=False, X=None, Y=None, Z=None, Sx=None, Sy=None, cables=None, metrics_recorder=None, Xn=[], Yn=[], b=[]):
         """Initialize component for plotting turbine locations
 
         Parameters
@@ -67,6 +67,9 @@ class XYPlotCompBathym(ExplicitComponent):
         self.Sy = Sy
         self.cables = cables
         self.metrics_recorder = metrics_recorder
+        self.Xn = Xn
+        self.Yn = Yn
+        self.b = b
     @property
     def ax(self):
         return self._ax or plt.gca()
@@ -98,6 +101,8 @@ class XYPlotCompBathym(ExplicitComponent):
 
     def init_plot(self, limits):
         self.ax.cla()
+        fig = plt.gcf()
+        fig.set_size_inches(10, 5)
         # self.ax.axis('equal')
 
         mi = limits.min(0)
@@ -161,6 +166,23 @@ class XYPlotCompBathym(ExplicitComponent):
             self.ax.plot(x_, y_, 'xk', ms=4)
         self.ax.plot([], [], 'xk', label='Current position')
         
+    def plot_nb_position(self, x, y):
+        for c, x_, y_ in zip(self.colors, x, y):
+            self.ax.plot(x_, y_, 'o', color=c, ms=5)
+            self.ax.plot(x_, y_, 'xk', ms=4)
+        
+    def plot_boundaries(self):
+        b = self.b
+        for i in range(len(b)):
+            bx = b[i][:,0]
+            by = b[i][:,1]
+            bx = np.append(bx,bx[0])
+            by = np.append(by,by[0])
+            if i == 0:
+                self.ax.plot(bx,by,color='k',linewidth=0.5,label='Boundary')
+            else:
+                self.ax.plot(bx,by,color='k',linewidth=0.5)
+        
     def plot_cables(self,x,y):
         u = self.metrics_recorder['cable_u'][-1]
         v = self.metrics_recorder['cable_v'][-1]
@@ -168,14 +190,18 @@ class XYPlotCompBathym(ExplicitComponent):
         CabName = ['Cable A=' + str(self.cables[0][0]) + 'mm²','Cable A=' + str(self.cables[1][0]) + 'mm²','Cable A=' + str(self.cables[2][0]) + 'mm²']
         # Plot cabling
         # a) Combine turbine + subsation coordinates
-        AllX = self.Sx + x.tolist()
-        AllY = self.Sy + y.tolist()
+        if len(self.Xn) == 0:
+            AllX = self.Sx + x.tolist()
+            AllY = self.Sy + y.tolist()
+        else:
+            AllX = self.Sx + x.tolist() + self.Xn.tolist()
+            AllY = self.Sy + y.tolist() + self.Yn.tolist()
         # b) helper for plot
         lw = [0.5,1,1.7]    # line width of different cable types
         plot2 = 0           # helper to plot legend of cable types only once
         cabplot = [0,0,0]   #            - " -
         # c) go through all turbines and plot connection
-        for i in range(len(x)):
+        for i in range(len(AllX)-len(self.Sx)):
             if cabplot[con[i][2]] == 0 and con[i][2] == plot2:
                 self.ax.plot([AllX[con[i][0]],AllX[con[i][1]]],[AllY[con[i][0]],AllY[con[i][1]]],color='firebrick',linewidth=lw[con[i][2]],label=CabName[con[i][2]])
                 cabplot[con[i][2]] = 1
@@ -233,6 +259,9 @@ class XYPlotCompBathym(ExplicitComponent):
             
             self.plot_bathymetry()
             
+            if len(self.b) > 0:
+                self.plot_boundaries()
+            
             self.plot_constraints()
 
             initial = self.get_initial()
@@ -249,6 +278,8 @@ class XYPlotCompBathym(ExplicitComponent):
                 cost0 = cost
             self.plot_cables(x,y)
             self.plot_current_position(x, y)
+            if len(self.Xn) > 0:
+                self.plot_nb_position(self.Xn,self.Yn)
             self.set_title(cost0, cost)
             self.ax.legend(loc='upper left',fontsize=7)
             
@@ -276,4 +307,9 @@ class XYPlotCompBathym(ExplicitComponent):
                 fig = self.ax
                 if not os.path.exists('Figures'):
                     os.makedirs('Figures')
-                plt.savefig('Figures/iteration_%s.png' % self.counter)
+                if len(self.Xn) == 0:
+                    plt.savefig('Figures/iteration_%s.png' % self.counter)
+                elif len(self.Xn) == len(x):
+                    plt.savefig('Figures/iteration_z2_%s.png' % self.counter)
+                else:
+                    plt.savefig('Figures/iteration_z3_%s.png' % self.counter)
