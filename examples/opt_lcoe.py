@@ -670,67 +670,17 @@ elif Mode == 'competitive':
     # 4. Plot history
     #
     if plot_convergence:
-        # plot lcoe
-        plt.figure(figsize=(5, 3))
-        # plt.plot(np.arange(metrics_recorder['iteration'][-1]),[x if x!=0 else np.NaN for x in metrics_recorder['lcoe']], label='Objective', linewidth = 1)
-        plt.plot(np.arange(metrics_recorder['iteration'][-1]),[x if x!=0 else np.NaN for x in metrics_recorder['lcoe1']], label='Zone 1', linewidth = 1)
-        plt.plot(np.arange(metrics_recorder['iteration'][-1]),[x if x!=0 else np.NaN for x in metrics_recorder['lcoe2']], label='Zone 2', linewidth = 1)
-        plt.plot(np.arange(metrics_recorder['iteration'][-1]),[x if x!=0 else np.NaN for x in metrics_recorder['lcoe3']], label='Zone 3', linewidth = 1)
-        plt.plot(np.arange(metrics_recorder['iteration'][-1]),[x if x!=0 else np.NaN for x in metrics_recorder['lcoe_all']], label='Overall', linewidth = 1)
-        plt.legend(fontsize=7)
-        plt.grid()
-        plt.xlabel('Iteration',fontsize=6)
-        plt.ylabel('LCOE (€/MWh)',fontsize=6)
-        plt.title('LCOE',fontsize=7)
-        plt.xticks(fontsize=6)
-        plt.yticks(fontsize=6)
-        #
-        # plot aep
-        plt.figure(figsize=(5, 3))
-        # plt.plot(np.arange(metrics_recorder['iteration'][-1]),[x if x!=0 else np.NaN for x in metrics_recorder['aep']], label='Objective', linewidth = 1)
-        plt.plot(np.arange(metrics_recorder['iteration'][-1]),[x if x!=0 else np.NaN for x in metrics_recorder['aep1']], label='Zone 1', linewidth = 1)
-        plt.plot(np.arange(metrics_recorder['iteration'][-1]),[x if x!=0 else np.NaN for x in metrics_recorder['aep2']], label='Zone 2', linewidth = 1)
-        plt.plot(np.arange(metrics_recorder['iteration'][-1]),[x if x!=0 else np.NaN for x in metrics_recorder['aep3']], label='Zone 3', linewidth = 1)
-        # plt.plot(np.arange(metrics_recorder['iteration'][-1]),[x if x!=0 else np.NaN for x in metrics_recorder['aep_all']], label='Overall', linewidth = 1)
-        plt.legend(fontsize=7)
-        plt.grid()
-        plt.xlabel('Iteration',fontsize=6)
-        plt.ylabel('AEP (GWh)',fontsize=6)
-        plt.title('AEP',fontsize=7)
-        plt.xticks(fontsize=6)
-        plt.yticks(fontsize=6)
-        #
-        # # plot cable cost
-        # plt.figure(figsize=(5, 3))
-        # # plt.plot(np.arange(metrics_recorder['iteration'][-1]),[x if x!=0 else np.NaN for x in metrics_recorder['cable_cost']], label='Objective', linewidth = 1)
-        # plt.plot(np.arange(metrics_recorder['iteration'][-1]),[x if x!=0 else np.NaN for x in metrics_recorder['cable_cost1']], label='Zone 1', linewidth = 1)
-        # plt.plot(np.arange(metrics_recorder['iteration'][-1]),[x if x!=0 else np.NaN for x in metrics_recorder['cable_cost2']], label='Zone 2', linewidth = 1)
-        # plt.plot(np.arange(metrics_recorder['iteration'][-1]),[x if x!=0 else np.NaN for x in metrics_recorder['cable_cost3']], label='Zone 3', linewidth = 1)
-        # # plt.plot(np.arange(metrics_recorder['iteration'][-1]),[x if x!=0 else np.NaN for x in metrics_recorder['cable_cost_all']], label='Overall', linewidth = 1)
-        # plt.legend(fontsize=7)
-        # plt.grid()
-        # plt.xlabel('Iteration',fontsize=6)
-        # plt.ylabel('Cable Cost (€)',fontsize=6)
-        # plt.title('Cable Cost',fontsize=7)
-        # plt.xticks(fontsize=6)
-        # plt.yticks(fontsize=6)
-        # #
-        # # plot monopile cost
-        # plt.figure(figsize=(5, 3))
-        # # plt.plot(np.arange(metrics_recorder['iteration'][-1]),[x if x!=0 else np.NaN for x in metrics_recorder['mp_cost']], label='Objective', linewidth = 1)
-        # plt.plot(np.arange(metrics_recorder['iteration'][-1]),[x if x!=0 else np.NaN for x in metrics_recorder['mp_cost1']], label='Zone 1', linewidth = 1)
-        # plt.plot(np.arange(metrics_recorder['iteration'][-1]),[x if x!=0 else np.NaN for x in metrics_recorder['mp_cost2']], label='Zone 2', linewidth = 1)
-        # plt.plot(np.arange(metrics_recorder['iteration'][-1]),[x if x!=0 else np.NaN for x in metrics_recorder['mp_cost3']], label='Zone 3', linewidth = 1)
-        # # plt.plot(np.arange(metrics_recorder['iteration'][-1]),[x if x!=0 else np.NaN for x in metrics_recorder['mp_cost_all']], label='Overall', linewidth = 1)
-        # plt.legend(fontsize=7)
-        # plt.grid()
-        # plt.xlabel('Iteration',fontsize=6)
-        # plt.ylabel('Monopile Cost (€)',fontsize=6)
-        # plt.title('Monopile Cost',fontsize=7)
-        # plt.xticks(fontsize=6)
-        # plt.yticks(fontsize=6)
-        #
-        # Save to a file
-        import pickle
-        with open("metric_recorder_sequential.pkl", "wb") as file:
-            pickle.dump({"metrics_recorder": metrics_recorder, "state": state}, file)
+        # lcoe
+        plot_convergence(mr=metrics_recorder,item='lcoe',plotstr='LCOE (€/MWh)',obj=0,overall=1)
+        # aep
+        plot_convergence(mr=metrics_recorder,item='aep',plotstr='AEP (GWh)',obj=0,overall=0)
+        # cable cost
+        plot_convergence(mr=metrics_recorder,item='cable_cost',plotstr='Cable Cost (€)',obj=0,overall=0)
+        # monopile cost
+        plot_convergence(mr=metrics_recorder,item='mp_cost',plotstr='Monopile Cost (€)',obj=0,overall=0)
+        
+    # ----------------------------------------
+    # 5. Save to a file
+    import pickle
+    with open("metric_recorder_sequential.pkl", "wb") as file:
+        pickle.dump({"metrics_recorder": metrics_recorder, "state": state}, file)
