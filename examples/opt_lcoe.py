@@ -482,6 +482,24 @@ metrics_recorder = {
     "lcoe_all": []
 }
 
+#%% Convergence plotting script
+def plot_convergence(mr=None,item=None,plotstr=None,obj=1,overall=0):
+    plt.figure(figsize=(5, 3))
+    plt.plot(np.arange(mr['iteration'][-1]),[x if x!=0 else np.NaN for x in mr[item+'1']], label='Zone 1', linewidth = 1)
+    plt.plot(np.arange(mr['iteration'][-1]),[x if x!=0 else np.NaN for x in mr[item+'2']], label='Zone 2', linewidth = 1)
+    plt.plot(np.arange(mr['iteration'][-1]),[x if x!=0 else np.NaN for x in mr[item+'3']], label='Zone 3', linewidth = 1)
+    if obj:
+        plt.plot(np.arange(mr['iteration'][-1]),[x if x!=0 else np.NaN for x in mr[item]], label='Overall', linewidth = 1)
+    if overall:
+        plt.plot(np.arange(mr['iteration'][-1]),[x if x!=0 else np.NaN for x in mr[item+'_all']], label='Overall', linewidth = 1)
+    plt.legend(fontsize=7)
+    plt.grid()
+    plt.xlabel('Iteration',fontsize=6)
+    plt.ylabel(plotstr,fontsize=6)
+    plt.title(plotstr,fontsize=7)
+    plt.xticks(fontsize=6)
+    plt.yticks(fontsize=6)
+
 #%% Cooperative design
 if Mode == 'cooperative':
     # Initital Layout
@@ -513,6 +531,7 @@ if Mode == 'cooperative':
 
     # Plot history
     if plot_convergence:
+        # overall metrics (relative)
         plt.figure(figsize=(5, 3))
         plt.plot(np.arange(metrics_recorder['iteration'][-1]), [(x - metrics_recorder['lcoe'][0]) / metrics_recorder['lcoe'][0] * 100 for x in metrics_recorder['lcoe']], label='lcoe', linewidth = 1)
         plt.plot(np.arange(metrics_recorder['iteration'][-1]), [(x - metrics_recorder['aep'][0]) / metrics_recorder['aep'][0] * 100 for x in metrics_recorder['aep']], label='aep', linewidth = 1)
@@ -525,10 +544,20 @@ if Mode == 'cooperative':
         plt.title('Convergence behaviour',fontsize=7)
         plt.xticks(fontsize=6)
         plt.yticks(fontsize=6)
-        # Save to a file
-        import pickle
-        with open("metric_recorder_cooperative.pkl", "wb") as file:
-            pickle.dump(metrics_recorder, file)
+        #
+        # lcoe
+        plot_convergence(mr=metrics_recorder,item='lcoe',plotstr='LCOE (€/MWh)',obj=1,overall=0)
+        # aep
+        plot_convergence(mr=metrics_recorder,item='aep',plotstr='AEP (GWh)',obj=0,overall=0)
+        # cable cost
+        plot_convergence(mr=metrics_recorder,item='cable_cost',plotstr='Cable Cost (€)',obj=0,overall=0)
+        # monopile cost
+        plot_convergence(mr=metrics_recorder,item='mp_cost',plotstr='Monopile Cost (€)',obj=0,overall=0)
+    
+    # Save to a file
+    import pickle
+    with open("metric_recorder_cooperative.pkl", "wb") as file:
+        pickle.dump({"metrics_recorder": metrics_recorder, "state": state}, file)
 
 #%% Competitive design
 elif Mode == 'competitive':
@@ -704,4 +733,4 @@ elif Mode == 'competitive':
         # Save to a file
         import pickle
         with open("metric_recorder_sequential.pkl", "wb") as file:
-            pickle.dump(metrics_recorder, file)
+            pickle.dump({"metrics_recorder": metrics_recorder, "state": state}, file)
