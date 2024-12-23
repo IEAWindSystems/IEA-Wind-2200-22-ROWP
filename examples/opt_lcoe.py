@@ -32,7 +32,7 @@ np.random.seed(2)
 Mode = 'competitive'    # 'cooperative' or 'competitive'
 tur_nr = 34             # Desired turbine number in optimized farm
 Model = 'gauss'
-plot_convergence = True
+plot_conv = True
 
 # lcoe parameters
 d = 0.05             # [-] discount rate
@@ -279,6 +279,8 @@ def lcoe_func(x, y, **kwargs):
     metrics_recorder["mp_cost"].append(sum(mp_cost))
     metrics_recorder["cable_cost"].append(cable_cost)
     metrics_recorder["lcoe"].append(lcoe)
+    metrics_recorder["x"].append(x)
+    metrics_recorder["y"].append(y)
     # performance of individual zones
     if Mode == 'cooperative':
         # store the values of the individual zones
@@ -479,7 +481,12 @@ metrics_recorder = {
     "lcoe1": [],
     "lcoe2": [],
     "lcoe3": [],
-    "lcoe_all": []
+    "lcoe_all": [],
+    "x": [],
+    "y": [],
+    "x_final": [],
+    "y_final": [],
+    "lcoe_final": []
 }
 
 #%% Convergence plotting script
@@ -529,8 +536,13 @@ if Mode == 'cooperative':
     toc = time.time()
     print('Optimization with SGD took: {:.0f}s'.format(toc-tic), ' with a total constraint violation of ', recorder['sgd_constraint'][-1])
 
+    # Store
+    metrics_recorder["lcoe_final"].append([cost])
+    metrics_recorder["x_final"].append(state['x'].tolist())
+    metrics_recorder["y_final"].append(state['y'].tolist())
+
     # Plot history
-    if plot_convergence:
+    if plot_conv:
         # overall metrics (relative)
         plt.figure(figsize=(5, 3))
         plt.plot(np.arange(metrics_recorder['iteration'][-1]), [(x - metrics_recorder['lcoe'][0]) / metrics_recorder['lcoe'][0] * 100 for x in metrics_recorder['lcoe']], label='lcoe', linewidth = 1)
@@ -591,7 +603,12 @@ elif Mode == 'competitive':
     cost, state, recorder = tf.optimize()
     toc = time.time()
     print('Optimization with SGD took: {:.0f}s'.format(toc-tic), ' with a total constraint violation of ', recorder['sgd_constraint'][-1])
-
+    
+    # Store
+    metrics_recorder["lcoe_final"].append([cost])
+    metrics_recorder["x_final"].append(state['x'].tolist())
+    metrics_recorder["y_final"].append(state['y'].tolist())
+    
     # ----------------------------------------
     # 2.) Optimize Mid Zone
     #
@@ -628,6 +645,11 @@ elif Mode == 'competitive':
     cost, state, recorder = tf.optimize()
     toc = time.time()
     print('Optimization with SGD took: {:.0f}s'.format(toc-tic), ' with a total constraint violation of ', recorder['sgd_constraint'][-1])
+
+    # Store
+    metrics_recorder["lcoe_final"].append([cost])
+    metrics_recorder["x_final"].append(state['x'].tolist())
+    metrics_recorder["y_final"].append(state['y'].tolist())
 
     # ----------------------------------------
     # 3.) Optimize South Zone
@@ -666,10 +688,15 @@ elif Mode == 'competitive':
     toc = time.time()
     print('Optimization with SGD took: {:.0f}s'.format(toc-tic), ' with a total constraint violation of ', recorder['sgd_constraint'][-1])
     
+    # Store
+    metrics_recorder["lcoe_final"].append([cost])
+    metrics_recorder["x_final"].append(state['x'].tolist())
+    metrics_recorder["y_final"].append(state['y'].tolist())
+    
     # ----------------------------------------
     # 4. Plot history
     #
-    if plot_convergence:
+    if plot_conv:
         # lcoe
         plot_convergence(mr=metrics_recorder,item='lcoe',plotstr='LCOE (€/MWh)',obj=0,overall=1)
         # aep
