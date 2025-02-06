@@ -44,9 +44,9 @@ HTrans = 15          # m
 WaveHeight = 2.52    # m
 WavePeriod = 5.45    # s
 WindSpeed = 9.924    # m/s ToDo: verfiy it is average wind speed
-capex = 5.5258e7        # $2010 per turbine, excl. Monopile, from DETECT for HKN scaled (22MW turbines)
-OpexAnnual = 1.3564e6   # $2010 per turbine, annual OPEX, from DETECT for HKN scaled (22MW turbines)
-LP = 2.6447e+06         # $2010 per turbine, liquidation proceeds, from DETECT for HKN scaled (22MW turbines)
+capex = 9.6712e7 * 0.924        # €2024 per turbine, excl. Monopile and cabling, from NREL COE Report 2024, converted to € with 2024 average exchange rate
+OpexAnnual = 2.97e6 * 0.924     # €2024 per turbine, annual OPEX,from NREL COE Report 2024, converted to € with 2024 average exchange rate
+LP = 0               # $2010 per turbine, liquidation proceeds, from DETECT for HKN scaled (22MW turbines)
 #
 # cable data [cross section, capacity, price]
 cables = np.array([[500, 3, 206], [800, 5, 287], [1000, 7, 406]])
@@ -491,6 +491,7 @@ metrics_recorder = {
 
 #%% Convergence plotting script
 def plot_convergence(mr=None,item=None,plotstr=None,obj=1,overall=0):
+    
     plt.figure(figsize=(5, 3))
     plt.plot(np.arange(mr['iteration'][-1]),[x if x!=0 else np.NaN for x in mr[item+'1']], label='Zone 1', linewidth = 1)
     plt.plot(np.arange(mr['iteration'][-1]),[x if x!=0 else np.NaN for x in mr[item+'2']], label='Zone 2', linewidth = 1)
@@ -499,13 +500,14 @@ def plot_convergence(mr=None,item=None,plotstr=None,obj=1,overall=0):
         plt.plot(np.arange(mr['iteration'][-1]),[x if x!=0 else np.NaN for x in mr[item]], label='Overall', linewidth = 1)
     if overall:
         plt.plot(np.arange(mr['iteration'][-1]),[x if x!=0 else np.NaN for x in mr[item+'_all']], label='Overall', linewidth = 1)
-    plt.legend(fontsize=7)
+    FS = 9
+    plt.legend(fontsize=FS)
     plt.grid()
-    plt.xlabel('Iteration',fontsize=6)
-    plt.ylabel(plotstr,fontsize=6)
-    plt.title(plotstr,fontsize=7)
-    plt.xticks(fontsize=6)
-    plt.yticks(fontsize=6)
+    plt.xlabel('Iteration',fontsize=FS)
+    plt.ylabel(plotstr,fontsize=FS)
+    plt.title(plotstr,fontsize=FS+2)
+    plt.xticks(fontsize=FS-1)
+    plt.yticks(fontsize=FS-1)
 
 #%% Cooperative design
 if Mode == 'cooperative':
@@ -699,6 +701,8 @@ elif Mode == 'competitive':
     if plot_conv:
         # lcoe
         plot_convergence(mr=metrics_recorder,item='lcoe',plotstr='LCOE (€/MWh)',obj=0,overall=1)
+        plt.ylim([52,57])
+        plt.savefig("plot_lcoe2.svg", format="svg", bbox_inches="tight")
         # aep
         plot_convergence(mr=metrics_recorder,item='aep',plotstr='AEP (GWh)',obj=0,overall=0)
         # cable cost
