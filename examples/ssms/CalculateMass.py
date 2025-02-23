@@ -21,7 +21,7 @@ class QLSModel(object):
         output = self.output_scaler.inverse_transform(scaled_output).ravel()
         return output
 
-def CalculateMass(RP, D, HTrans, HHub_Ratio, WaterDepth, WaveHeight, WavePeriod, WindSpeed):
+def CalculateMass(RP, D, HTrans, HHub_Ratio, WaterDepth, WaveHeight, WavePeriod, WindSpeed, IP_item):
     # load the surrogates
     model_path = 'ssms/models/QLS'
     model_indicator = '_QLS_surrogate_model.pickle'
@@ -33,7 +33,6 @@ def CalculateMass(RP, D, HTrans, HHub_Ratio, WaterDepth, WaveHeight, WavePeriod,
             IP = float(file.split(model_indicator)[0])
             files.append(file)
             IPs.append(IP)
-    IP_item = 0
     IP = IPs[IP_item]
     path = os.path.join(model_path, files[IP_item])
     with open(path, 'rb') as f:

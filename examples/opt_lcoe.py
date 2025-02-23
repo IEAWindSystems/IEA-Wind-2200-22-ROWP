@@ -34,6 +34,8 @@ tur_nr = 34             # Desired turbine number in optimized farm
 Model = 'gauss'
 plot_conv = True
 
+# monopile optimization
+MP_ref = 1          # reference turbine type for monopile mass scaling. 0 = 10MW, 1 = 15MW, 2 = 3.4MW
 # lcoe parameters
 d = 0.05             # [-] discount rate
 life = 25            # years, lifetime
@@ -49,7 +51,12 @@ OpexAnnual = 2.97e6 * 0.924     # €2024 per turbine, annual OPEX,from NREL COE
 LP = 0               # $2010 per turbine, liquidation proceeds, from DETECT for HKN scaled (22MW turbines)
 #
 # cable data [cross section, capacity, price]
-cables = np.array([[500, 3, 206], [800, 5, 287], [1000, 7, 406]])
+# 110kV
+cables = np.array([[185,3,368.9], [400,5,428.9], [1000,7,737.1]])
+# cables = np.array([[500, 3, 393], [800, 5, 522.4], [1000, 7, 615.5]])
+# inflation correction 2017€ to 2024€
+Inf = [2.1, 2.4, 1.8, 1.2, 4.7, 8, 4.1]     # 2017-2023
+cables[:,2] *= np.prod(np.array(Inf) / 100 + 1)
 #
 #%% Load data and setup pywake
 # system_dat = sys.argv[1]
@@ -174,8 +181,10 @@ P_interpolator = interp1d(np.cumsum(sum(P)), ws, kind='linear')  # interpolator 
 V_ave = P_interpolator(0.5).tolist()
 masses = []
 for z in depths:
-   cur_mass = CalculateMass(RP=rp/1e6, D=rd, HTrans=ph, HHub_Ratio=hh/rd, WaterDepth=z, WaveHeight=swh, WavePeriod=swp, WindSpeed=V_ave)
+   cur_mass = CalculateMass(RP=rp/1e6, D=rd, HTrans=ph, HHub_Ratio=hh/rd, WaterDepth=z, WaveHeight=swh, WavePeriod=swp, WindSpeed=V_ave, IP_item=MP_ref)
    masses.append(cur_mass[0][0])
+# add transition piece (100t, from 22MW report)
+masses = [x + 100000 for x in masses]
 
 # Fit a polynomial of degree 2
 # depthmass = np.genfromtxt('depth.mass', delimiter=',')
@@ -218,10 +227,10 @@ def lcoe_func(x, y, **kwargs):
     for water_depth in depths:
        dmasses.append(polynomial_gradients(water_depth))
        masses.append(polynomial(water_depth))
-    mp_cost = 2.25 * np.array(masses)
+    mp_cost = 3 * np.array(masses)  # from ORBIT 2025 monopile_steel_cost default
     # gradients (for function later, to avoid double calculus)
     dmasses = (np.array(dmasses) * get_depth_grads(x, y)[:, 0, :].T)
-    dmp_cost = 2.25 * dmasses
+    dmp_cost = 3 * dmasses          # from ORBIT 2025 tp_steel_cost default
     #
     # 3.) Cable costs
     # initialize
