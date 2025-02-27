@@ -55,8 +55,8 @@ LP = 0               # $2010 per turbine, liquidation proceeds, from DETECT for 
 cables = np.array([[185,3,368.9], [400,5,428.9], [1000,7,737.1]])
 # cables = np.array([[500, 3, 393], [800, 5, 522.4], [1000, 7, 615.5]])
 # inflation correction 2017€ to 2024€
-Inf = [2.1, 2.4, 1.8, 1.2, 4.7, 8, 4.1]     # 2017-2023
-cables[:,2] *= np.prod(np.array(Inf) / 100 + 1)
+# Inf = [2.1, 2.4, 1.8, 1.2, 4.7, 8, 4.1]     # 2017-2023
+# cables[:,2] *= np.prod(np.array(Inf) / 100 + 1)
 #
 #%% Load data and setup pywake
 # system_dat = sys.argv[1]
