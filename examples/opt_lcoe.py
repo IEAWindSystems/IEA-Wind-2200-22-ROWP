@@ -398,6 +398,10 @@ def lcoe_func(x, y, **kwargs):
     aep = np.sum(aep).item()
     return lcoe # $/MWh
 
+# Dummy function to return 0 costs --> speed up algorithm
+def dummy_lcoe(x,y):
+    return 0
+
 #%% Objective gradient function
 def wrap_depth(s): 
     return depth_interp(*np.split(s, 2))
