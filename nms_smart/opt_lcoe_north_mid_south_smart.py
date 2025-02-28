@@ -79,15 +79,15 @@ elif 'weibull_k' in resource_dat['wind_resource'].keys():
    k = resource_dat['wind_resource']['weibull_k']
    freq = resource_dat['wind_resource']['sector_probability']
    wd = resource_dat['wind_resource']['wind_direction']
-   ws = resource_dat['wind_resource']['wind_speed']
+   # ws = resource_dat['wind_resource']['wind_speed']
    site = XRSite(
           ds=xr.Dataset(data_vars=
                            {'Sector_frequency': ('wd', freq['data']), 
                             'Weibull_A': ('wd', A['data']), 
-                            'Weibull_k': ('wd', k['data']), 
-                            'TI': (resource_dat['wind_resource']['turbulence_intensity']['dims'][0], resource_dat['wind_resource']['turbulence_intensity']['data'])
+                            'Weibull_k': ('wd', k['data']),
+                            'TI': resource_dat['wind_resource']['turbulence_intensity']['data']
                             },
-                         coords={'wd': wd, 'ws': ws}))
+                         coords={'wd': wd}))
    
    timeseries = False
    TI =  resource_dat['wind_resource']['turbulence_intensity']['data']
