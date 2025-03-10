@@ -30,7 +30,7 @@ class XYPlotCompBathym(ExplicitComponent):
     # colors = ['b', 'r', 'm', 'c', 'g', 'y', 'orange', 'indigo', 'grey'] * 100
     colors = [c['color'] for c in iter(matplotlib.rcParams['axes.prop_cycle'])] * 100
 
-    def __init__(self, memory=10, delay=0.001, plot_initial=True, plot_improvements_only=False, ax=None, legendloc=1, save_plot_per_iteration=False, X=None, Y=None, Z=None, Sx=None, Sy=None, cables=None, metrics_recorder=None, Xn=[], Yn=[], b=[]):
+    def __init__(self, memory=10, delay=0.001, plot_initial=True, plot_improvements_only=False, ax=None, legendloc=1, save_plot_per_iteration=False, X=None, Y=None, Z=None, Sx=None, Sy=None, cables=None, metrics_recorder=None, Xn=[], Yn=[], b=[], opt_nr=None):
         """Initialize component for plotting turbine locations
 
         Parameters
@@ -70,6 +70,7 @@ class XYPlotCompBathym(ExplicitComponent):
         self.Xn = Xn
         self.Yn = Yn
         self.b = b
+        self.opt_nr = opt_nr
     @property
     def ax(self):
         return self._ax or plt.gca()
@@ -211,19 +212,17 @@ class XYPlotCompBathym(ExplicitComponent):
         # d) Plot Substation
         self.ax.scatter(self.Sx,self.Sy,marker='s',s=7,color='k', zorder=3,label='Substation')
     def set_title(self, cost0, cost):
-        rec = self.problem.recorder
-        if hasattr(self.problem.cost_comp, 'inc_or_exp'):
-            inc_or_exp = self.problem.cost_comp.inc_or_exp
-        else:
-            inc_or_exp = 1.0
-        # LCOE
-        title = "Iteration: %d \n LCOE = %.2f $/MWh (%+.2f%%)" % (rec.num_cases, cost * inc_or_exp, (cost - cost0) / cost0 * 100)
-        #AEP
-        title += " \n AEP = %.1f GWh (%+.2f%%)" % (self.metrics_recorder['aep'][-1]/1e3, (self.metrics_recorder['aep'][-1]/1e3 - self.metrics_recorder['aep'][0]/1e3) / (self.metrics_recorder['aep'][0]/1e3) * 100)
-        #Cable Cost
-        title += " \n Cab-Cost = %s $ (%+.2f%%)" % ("{:,.0f}".format(self.metrics_recorder['cable_cost'][-1]), (self.metrics_recorder['cable_cost'][-1] - self.metrics_recorder['cable_cost'][0]) / self.metrics_recorder['cable_cost'][0] * 100)
-        #Monopile Cost
-        title += " \n MP-Cost = %s $ (%+.2f%%)" % ("{:,.0f}".format(self.metrics_recorder['mp_cost'][-1]), (self.metrics_recorder['mp_cost'][-1] - self.metrics_recorder['mp_cost'][0]) / self.metrics_recorder['mp_cost'][0] * 100)
+        # Overall optimization
+        title = "\nIteration: %d"  % (self.metrics_recorder['iteration'][-1]-1)
+        # For sequential layout, add overall LCOE
+        title += "\n" + "Overall LCOE" + " = %.2f $/MWh (%+.2f%%)" % (self.metrics_recorder['lcoe_all'][-1], (self.metrics_recorder['lcoe_all'][-1] - self.metrics_recorder['lcoe_all'][0]) / self.metrics_recorder['lcoe_all'][0] * 100)
+        #
+        items = ['north','mid','south']
+        for idx, zone in enumerate(items):
+            if self.metrics_recorder['lcoe_' + zone][-1] != 0:
+                title += " \n LCOE " + zone + " = %.2f $/MWh (%+.2f%%)" % (self.metrics_recorder['lcoe_' + zone][-1], (self.metrics_recorder['lcoe_' + zone][-1] - self.metrics_recorder['lcoe_' + zone][next(i for i, value in enumerate(self.metrics_recorder['lcoe_' + zone]) if value != 0)]) / (self.metrics_recorder['lcoe_' + zone][next(i for i, value in enumerate(self.metrics_recorder['lcoe_' + zone]) if value != 0)]) * 100)
+            else:
+                title += " \n LCOE " + zone + " = - $/MWh (-%)"
         self.ax.set_title(title,fontsize=9)
         
     def get_initial(self):
@@ -304,12 +303,9 @@ class XYPlotCompBathym(ExplicitComponent):
             outputs['plot_counter'] = self.counter
 
             if self.save_plot_per_iteration:
-                fig = self.ax
                 if not os.path.exists('Figures'):
                     os.makedirs('Figures')
-                if len(self.Xn) == 0:
-                    plt.savefig('Figures/iteration_%s.png' % self.counter)
-                elif len(self.Xn) == len(x):
-                    plt.savefig('Figures/iteration_z2_%s.png' % self.counter)
+                if self.opt_nr:
+                    plt.savefig('Figures/iteration_z' + str(self.opt_nr) + '_%s.png' % self.counter)
                 else:
-                    plt.savefig('Figures/iteration_z3_%s.png' % self.counter)
+                    plt.savefig('Figures/iteration_%s.png' % self.counter)
