@@ -395,7 +395,7 @@ def lcoe_func(x, y, **kwargs):
             metrics_recorder["cable_v"][-1] = [y+2+tur_nr if y != 1 else y for y in cable_v_n[0]] + [y+2+tur_nr*2 if y != 1 else y+1 for y in cable_v_n[1]] + [y+2 for y in metrics_recorder["cable_v"][-1]]
             metrics_recorder["cable_type"][-1] = cable_type_n[0] + cable_type_n[1] + metrics_recorder["cable_type"][-1]
     # for global variable
-    aep = np.sum(aep).item()
+    aep = aep.isel(wt=slice(0,len(x))).sum().item()
     return lcoe # $/MWh
 
 # Dummy function to return 0 costs --> speed up algorithm
