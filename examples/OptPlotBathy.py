@@ -30,7 +30,7 @@ class XYPlotCompBathym(ExplicitComponent):
     # colors = ['b', 'r', 'm', 'c', 'g', 'y', 'orange', 'indigo', 'grey'] * 100
     colors = [c['color'] for c in iter(matplotlib.rcParams['axes.prop_cycle'])] * 100
 
-    def __init__(self, memory=10, delay=0.001, plot_initial=True, plot_improvements_only=False, ax=None, legendloc=1, save_plot_per_iteration=False, X=None, Y=None, Z=None, Sx=None, Sy=None, cables=None, metrics_recorder=None, Xn=[], Yn=[], b=[], opt_nr=None):
+    def __init__(self, memory=10, delay=0.001, plot_initial=True, plot_improvements_only=False, ax=None, legendloc=1, save_plot_per_iteration=False, X=None, Y=None, Z=None, Sx=None, Sy=None, cables=None, metrics_recorder=None, Xn=[], Yn=[], b=[], opt_nr=None, folder='Figures'):
         """Initialize component for plotting turbine locations
 
         Parameters
@@ -71,6 +71,7 @@ class XYPlotCompBathym(ExplicitComponent):
         self.Yn = Yn
         self.b = b
         self.opt_nr = opt_nr
+        self.folder = folder
     @property
     def ax(self):
         return self._ax or plt.gca()
@@ -303,9 +304,9 @@ class XYPlotCompBathym(ExplicitComponent):
             outputs['plot_counter'] = self.counter
 
             if self.save_plot_per_iteration:
-                if not os.path.exists('Figures'):
-                    os.makedirs('Figures')
+                if not os.path.exists(self.folder):
+                    os.makedirs(self.folder)
                 if self.opt_nr:
-                    plt.savefig('Figures/iteration_z' + str(self.opt_nr) + '_%s.png' % self.counter)
+                    plt.savefig(self.folder + '/iteration_z' + str(self.opt_nr) + '_%s.png' % self.counter)
                 else:
-                    plt.savefig('Figures/iteration_%s.png' % self.counter)
+                    plt.savefig(self.folder + '/iteration_%s.png' % self.counter)

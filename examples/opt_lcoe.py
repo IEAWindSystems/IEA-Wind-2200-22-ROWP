@@ -367,9 +367,9 @@ def lcoe_func(x, y, **kwargs):
             elif n == 1:
                 aep_n = aep.isel(wt=slice(tur_nr[wf[curzone]] + tur_nr[wf[nb[n-1]]],None)).sum().item()
             metrics_recorder["aep_" + nb[n]].append(aep_n)
-            metrics_recorder["cable_cost_" + nb[n]].append(cable_cost_n[wf[nb[n]]])
-            metrics_recorder["mp_cost_" + nb[n]].append(mp_cost_n[wf[nb[n]]])
-            npv_n = (capex*tur_nr[wf[nb[n]]] + mp_cost_n[wf[nb[n]]] + cable_cost_n[wf[nb[n]]] + LP*tur_nr[wf[nb[n]]]) * CRF + OpexAnnual*tur_nr[wf[nb[n]]]
+            metrics_recorder["cable_cost_" + nb[n]].append(cable_cost_n[n])
+            metrics_recorder["mp_cost_" + nb[n]].append(mp_cost_n[n])
+            npv_n = (capex*tur_nr[wf[nb[n]]] + mp_cost_n[n] + cable_cost_n[n] + LP*tur_nr[wf[nb[n]]]) * CRF + OpexAnnual*tur_nr[wf[nb[n]]]
             metrics_recorder["lcoe_" + nb[n]].append(npv_n / aep_n)
             npv_all.append(npv_n)
             
@@ -588,7 +588,7 @@ elif Mode == 'competitive':
     # general options
     SepCabling = False
     boundplot = list(boundaries.values())
-    
+    plot_folder = "Figures_" + ''.join([entry[0] for entry in Sequence])
     # dicts to store values
     res_cable_cost = {}
     res_cable_u = {}
@@ -634,7 +634,8 @@ elif Mode == 'competitive':
                 cost_comp = CostModelComponent(input_keys=['x','y'], n_wt=tur_nr[wf[Sequence[i]]], cost_function=lcoe_func, objective=True, cost_gradient_function=lcoe_jac, maximize=False),
                 constraints = DistanceConstraintAggregation([SpacingConstraint(min_spacing_m), constraint_comp],tur_nr[wf[Sequence[i]]], min_spacing_m, windTurbines), 
                 driver = EasySGDDriver(maxiter=3000, learning_rate=windTurbines.diameter(), max_time=1008000, gamma_min_factor=0.1, speedupSGD=True, sgd_thresh=0.12),
-                plot_comp = XYPlotCompBathym(save_plot_per_iteration=True, plot_initial=False, memory=0, X=X_utm, Y=Y_utm, Z=Z, Sx=Subs_x[:len(nb)+1], Sy=Subs_y[:len(nb)+1], cables=cables, metrics_recorder=metrics_recorder, Xn=xn, Yn=yn, b=boundplot, opt_nr=opt_nr)
+                plot_comp = XYPlotCompBathym(save_plot_per_iteration=True, plot_initial=False, memory=0, X=X_utm, Y=Y_utm, Z=Z,Sx=[x for _, x in sorted(zip([wf[item] for item in Sequence], Subs_x))][:len(nb)+1],
+                                             Sy=[y for _, y in sorted(zip([wf[item] for item in Sequence], Subs_y))][:len(nb)+1], cables=cables, metrics_recorder=metrics_recorder, Xn=xn, Yn=yn, b=boundplot, opt_nr=opt_nr, folder=plot_folder)
                 )
         
         # Run
