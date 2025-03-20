@@ -611,9 +611,11 @@ elif Mode == 'competitive':
         # Options
         Sx = [Subs_x[wf[Sequence[i]]]]
         Sy = [Subs_y[wf[Sequence[i]]]]
-        nb = Sequence[:i]
         curzone = Sequence[i]
-        nnb = Sequence[i+1:]
+        nb = Sequence[:i]
+        nb = list(dict.fromkeys(nb[::-1]))[::-1]    # only keep latest ones in case of multiple entries
+        nb = [x for x in nb if x not in curzone]    # kick out if current zone countained
+        nnb = list(dict.fromkeys([x for x in Sequence if x not in nb and x not in curzone]))
         
         if nb:
             nf = True
@@ -634,8 +636,8 @@ elif Mode == 'competitive':
                 cost_comp = CostModelComponent(input_keys=['x','y'], n_wt=tur_nr[wf[Sequence[i]]], cost_function=lcoe_func, objective=True, cost_gradient_function=lcoe_jac, maximize=False),
                 constraints = DistanceConstraintAggregation([SpacingConstraint(min_spacing_m), constraint_comp],tur_nr[wf[Sequence[i]]], min_spacing_m, windTurbines), 
                 driver = EasySGDDriver(maxiter=3000, learning_rate=windTurbines.diameter(), max_time=1008000, gamma_min_factor=0.1, speedupSGD=True, sgd_thresh=0.12),
-                plot_comp = XYPlotCompBathym(save_plot_per_iteration=True, plot_initial=False, memory=0, X=X_utm, Y=Y_utm, Z=Z,Sx=[x for _, x in sorted(zip([wf[item] for item in Sequence], Subs_x))][:len(nb)+1],
-                                             Sy=[y for _, y in sorted(zip([wf[item] for item in Sequence], Subs_y))][:len(nb)+1], cables=cables, metrics_recorder=metrics_recorder, Xn=xn, Yn=yn, b=boundplot, opt_nr=opt_nr, folder=plot_folder)
+                plot_comp = XYPlotCompBathym(save_plot_per_iteration=True, plot_initial=False, memory=0, X=X_utm, Y=Y_utm, Z=Z,Sx=[Subs_x[wf[nb]] for nb in nb]+[Subs_x[wf[curzone]]],
+                                             Sy=[Subs_y[wf[nb]] for nb in nb]+[Subs_y[wf[curzone]]], cables=cables, metrics_recorder=metrics_recorder, Xn=xn, Yn=yn, b=boundplot, opt_nr=opt_nr, folder=plot_folder)
                 )
         
         # Run
@@ -651,8 +653,8 @@ elif Mode == 'competitive':
         res_x[Sequence[i]] = state['x']
         res_y[Sequence[i]] = state['y']
         res_cable_cost[Sequence[i]] = metrics_recorder['cable_cost'][-1]
-        res_cable_u[Sequence[i]] = [x-i for x in metrics_recorder["cable_u"][-1][-tur_nr[wf[Sequence[i]]]:]]
-        res_cable_v[Sequence[i]] = [y-i for y in metrics_recorder["cable_v"][-1][-tur_nr[wf[Sequence[i]]]:]]
+        res_cable_u[Sequence[i]] = [x-len(nb) for x in metrics_recorder["cable_u"][-1][-tur_nr[wf[Sequence[i]]]:]]
+        res_cable_v[Sequence[i]] = [y-len(nb) for y in metrics_recorder["cable_v"][-1][-tur_nr[wf[Sequence[i]]]:]]
         res_cable_type[Sequence[i]] = metrics_recorder['cable_type'][-1][-tur_nr[wf[Sequence[i]]]:]
         res_mp_cost[Sequence[i]] = metrics_recorder['mp_cost'][-1]
         
