@@ -30,7 +30,7 @@ class XYPlotCompBathym(ExplicitComponent):
     # colors = ['b', 'r', 'm', 'c', 'g', 'y', 'orange', 'indigo', 'grey'] * 100
     colors = [c['color'] for c in iter(matplotlib.rcParams['axes.prop_cycle'])] * 100
 
-    def __init__(self, memory=10, delay=0.001, plot_initial=True, plot_improvements_only=False, ax=None, legendloc=1, save_plot_per_iteration=False, X=None, Y=None, Z=None, Sx=None, Sy=None, cables=None, metrics_recorder=None, Xn=[], Yn=[], b=[], opt_nr=None, folder='Figures'):
+    def __init__(self, memory=10, delay=0.001, plot_initial=True, plot_improvements_only=False, ax=None, legendloc=1, save_plot_per_iteration=False, X=None, Y=None, Z=None, Sx=None, Sy=None, cables=None, metrics_recorder=None, Xn=[], Yn=[], b=[], opt_nr=None, folder='Figures', sampling=False):
         """Initialize component for plotting turbine locations
 
         Parameters
@@ -72,6 +72,7 @@ class XYPlotCompBathym(ExplicitComponent):
         self.b = b
         self.opt_nr = opt_nr
         self.folder = folder
+        self.sampling = sampling
     @property
     def ax(self):
         return self._ax or plt.gca()
@@ -186,44 +187,45 @@ class XYPlotCompBathym(ExplicitComponent):
                 self.ax.plot(bx,by,color='k',linewidth=0.5)
         
     def plot_cables(self,x,y):
-        u = self.metrics_recorder['cable_u'][-1]
-        v = self.metrics_recorder['cable_v'][-1]
-        con = list(zip([x - 1 for x in v], [x - 1 for x in u], self.metrics_recorder['cable_type'][-1]))
         CabName = ['Cable A=' + str(self.cables[0][0]) + 'mm²','Cable A=' + str(self.cables[1][0]) + 'mm²','Cable A=' + str(self.cables[2][0]) + 'mm²']
-        # Plot cabling
-        # a) Combine turbine + subsation coordinates
-        if len(self.Xn) == 0:
-            AllX = self.Sx + x.tolist()
-            AllY = self.Sy + y.tolist()
-        else:
-            AllX = self.Sx + x.tolist() + self.Xn.tolist()
-            AllY = self.Sy + y.tolist() + self.Yn.tolist()
-        # b) helper for plot
-        lw = [0.5,1,1.7]    # line width of different cable types
+        # go through the different zones
         plot2 = 0           # helper to plot legend of cable types only once
         cabplot = [0,0,0]   #            - " -
-        # c) go through all turbines and plot connection
-        for i in range(len(AllX)-len(self.Sx)):
-            if cabplot[con[i][2]] == 0 and con[i][2] == plot2:
-                self.ax.plot([AllX[con[i][0]],AllX[con[i][1]]],[AllY[con[i][0]],AllY[con[i][1]]],color='firebrick',linewidth=lw[con[i][2]],label=CabName[con[i][2]])
-                cabplot[con[i][2]] = 1
-                plot2 = plot2 + 1
-            else:
-                self.ax.plot([AllX[con[i][0]],AllX[con[i][1]]],[AllY[con[i][0]],AllY[con[i][1]]],color='firebrick',linewidth=lw[con[i][2]])
+        for idx, zone in enumerate(self.metrics_recorder['sequence']):
+            if self.metrics_recorder['cable_u_' + zone]:
+                u = self.metrics_recorder['cable_u_' + zone][-1]
+                v = self.metrics_recorder['cable_v_' + zone][-1]
+                con = list(zip([x - 1 for x in v], [x - 1 for x in u], self.metrics_recorder['cable_type_' + zone][-1]))
+                # Plot cabling
+                # a) Combine turbine + subsation coordinates
+                AllX = [self.Sx[zone]] + self.metrics_recorder['x_' + zone][-1]
+                AllY = [self.Sy[zone]] + self.metrics_recorder['y_' + zone][-1]
+                # b) helper for plot
+                lw = [0.5,1,1.7]    # line width of different cable types
+                # c) go through all turbines and plot connection
+                for i in range(len(AllX)-len(self.Sx)):
+                    if cabplot[con[i][2]] == 0 and con[i][2] == plot2:
+                        self.ax.plot([AllX[con[i][0]],AllX[con[i][1]]],[AllY[con[i][0]],AllY[con[i][1]]],color='firebrick',linewidth=lw[con[i][2]],label=CabName[con[i][2]])
+                        cabplot[con[i][2]] = 1
+                        plot2 = plot2 + 1
+                    else:
+                        self.ax.plot([AllX[con[i][0]],AllX[con[i][1]]],[AllY[con[i][0]],AllY[con[i][1]]],color='firebrick',linewidth=lw[con[i][2]])
         # d) Plot Substation
-        self.ax.scatter(self.Sx,self.Sy,marker='s',s=7,color='k', zorder=3,label='Substation')
-    def set_title(self, cost0, cost):
+        self.ax.scatter(list(self.Sx.values()),list(self.Sy.values()),marker='s',s=7,color='k', zorder=3,label='Substation')
+    def set_title(self):
         # Overall optimization
         title = "\nIteration: %d"  % (self.metrics_recorder['iteration'][-1]-1)
-        # For sequential layout, add overall LCOE
-        title += "\n" + "Overall LCOE" + " = %.2f $/MWh (%+.2f%%)" % (self.metrics_recorder['lcoe_all'][-1], (self.metrics_recorder['lcoe_all'][-1] - self.metrics_recorder['lcoe_all'][0]) / self.metrics_recorder['lcoe_all'][0] * 100)
-        #
-        items = ['north','mid','south']
-        for idx, zone in enumerate(items):
-            if self.metrics_recorder['lcoe_' + zone][-1] != 0:
-                title += " \n LCOE " + zone + " = %.2f $/MWh (%+.2f%%)" % (self.metrics_recorder['lcoe_' + zone][-1], (self.metrics_recorder['lcoe_' + zone][-1] - self.metrics_recorder['lcoe_' + zone][next(i for i, value in enumerate(self.metrics_recorder['lcoe_' + zone]) if value != 0)]) / (self.metrics_recorder['lcoe_' + zone][next(i for i, value in enumerate(self.metrics_recorder['lcoe_' + zone]) if value != 0)]) * 100)
-            else:
-                title += " \n LCOE " + zone + " = - $/MWh (-%)"
+        # Plot lcoe if no sampling
+        if not self.sampling:
+            # For sequential layout, add overall LCOE
+            title += "\n" + "Overall LCOE" + " = %.2f $/MWh (%+.2f%%)" % (self.metrics_recorder['lcoe_all'][-1], (self.metrics_recorder['lcoe_all'][-1] - self.metrics_recorder['lcoe_all'][0]) / self.metrics_recorder['lcoe_all'][0] * 100)
+            #
+            items = ['north','mid','south']
+            for idx, zone in enumerate(items):
+                if self.metrics_recorder['lcoe_' + zone][-1] != 0:
+                    title += " \n LCOE " + zone + " = %.2f $/MWh (%+.2f%%)" % (self.metrics_recorder['lcoe_' + zone][-1], (self.metrics_recorder['lcoe_' + zone][-1] - self.metrics_recorder['lcoe_' + zone][next(i for i, value in enumerate(self.metrics_recorder['lcoe_' + zone]) if value != 0)]) / (self.metrics_recorder['lcoe_' + zone][next(i for i, value in enumerate(self.metrics_recorder['lcoe_' + zone]) if value != 0)]) * 100)
+                else:
+                    title += " \n LCOE " + zone + " = - $/MWh (-%)"
         self.ax.set_title(title,fontsize=9)
         
     def get_initial(self):
@@ -236,14 +238,6 @@ class XYPlotCompBathym(ExplicitComponent):
 
     def compute(self, inputs, outputs):
         if self.by_pass is False:
-            cost = inputs[self.cost_key][0]
-
-            if (self.plot_improvements_only and
-                'cost' in self.problem.recorder.driver_iteration_dict and
-                len(self.problem.recorder['cost']) and
-                    cost > self.problem.recorder['cost'].min()):
-                return
-
             # find limits
             def get_lim(key):
                 if (key in self.problem.design_vars and
@@ -252,9 +246,12 @@ class XYPlotCompBathym(ExplicitComponent):
                     return np.min(self.problem.design_vars[key][1]), np.max(np.min(self.problem.design_vars[key][2]))
                 else:
                     return min(inputs[key]), max(inputs[key])
-            min_x, max_x = get_lim(topfarm.x_key)
-            min_y, max_y = get_lim(topfarm.y_key)
-
+            min_x, max_x = get_lim('x')
+            min_y, max_y = get_lim('y')
+            # min_x = min(inputs['x'])
+            # max_x = max(inputs['x'])
+            # min_y = min(inputs['y'])
+            # max_y = max(inputs['y'])
             self.init_plot(np.array([[min_x, min_y], [max_x, max_y]]))
             
             self.plot_bathymetry()
@@ -264,23 +261,15 @@ class XYPlotCompBathym(ExplicitComponent):
             
             self.plot_constraints()
 
-            initial = self.get_initial()
+            x = inputs['x']
+            y = inputs['y']
 
-            x = inputs[topfarm.x_key]
-            y = inputs[topfarm.y_key]
-            if initial is not None:
-                x0, y0, cost0 = initial
-                if self.plot_initial:
-                    self.plot_initial2current(x0, y0, x, y)
-                if self.memory > 0:
-                    self.plot_history(x, y)
-            else:
-                cost0 = cost
             self.plot_cables(x,y)
             self.plot_current_position(x, y)
             if len(self.Xn) > 0:
                 self.plot_nb_position(self.Xn,self.Yn)
-            self.set_title(cost0, cost)
+            
+            self.set_title()
             self.ax.legend(loc='upper left',fontsize=7)
             
             self.ax.grid(alpha=0.6)

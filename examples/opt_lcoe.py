@@ -38,6 +38,7 @@ tur_nr = [33,33,34]             # Desired turbine number in optimized farm, from
 
 # monopile optimization
 MP_ref = 1          # reference turbine type for monopile mass scaling. 0 = 10MW, 1 = 15MW, 2 = 3.4MW
+
 # lcoe parameters
 d = 0.05             # [-] discount rate
 life = 25            # years, lifetime
@@ -51,54 +52,32 @@ WindSpeed = 9.924    # m/s ToDo: verfiy it is average wind speed
 capex = 9.6712e7 * 0.924        # €2024 per turbine, excl. Monopile and cabling, from NREL COE Report 2024, converted to € with 2024 average exchange rate
 OpexAnnual = 2.97e6 * 0.924     # €2024 per turbine, annual OPEX,from NREL COE Report 2024, converted to € with 2024 average exchange rate
 LP = 0               # $2010 per turbine, liquidation proceeds, from DETECT for HKN scaled (22MW turbines)
-#
+
 # cable data [cross section, capacity, price]
-# 110kV
-cables = np.array([[185,3,368.9], [400,5,428.9], [1000,7,737.1]])
-# cables = np.array([[500, 3, 393], [800, 5, 522.4], [1000, 7, 615.5]])
-# inflation correction 2017€ to 2024€
-# Inf = [2.1, 2.4, 1.8, 1.2, 4.7, 8, 4.1]     # 2017-2023
-# cables[:,2] *= np.prod(np.array(Inf) / 100 + 1)
-#
+cables = np.array([[185,3,368.9], [400,5,428.9], [1000,7,737.1]])       # 110kV
+# cables = np.array([[500, 3, 393], [800, 5, 522.4], [1000, 7, 615.5]]) # 66kV
+
 #%% Load data and setup pywake
 # system_dat = sys.argv[1]
 system_dat = load_yaml(os.sep.join(['..', 'inputs', 'wind_energy_system.yaml']))
 farm_dat = system_dat['wind_farm']
 resource_dat = system_dat['site']['energy_resource']
 
-if 'timeseries' in resource_dat['wind_resource'].keys():
-   timeseries = True
-   wind_resource_timeseries = resource_dat['wind_resource']['timeseries']
-   times = [d['time'] for d in wind_resource_timeseries]
-   ws = [d['speed'] for d in wind_resource_timeseries]
-   wd = [d['direction'] for d in wind_resource_timeseries]
-   assert(len(times) == len(ws))
-   assert(len(wd) == len(ws))
-   site = Hornsrev1Site()
-   TI = None
-elif 'weibull_k' in resource_dat['wind_resource'].keys():
-   A = resource_dat['wind_resource']['weibull_a']
-   k = resource_dat['wind_resource']['weibull_k']
-   freq = resource_dat['wind_resource']['sector_probability']
-   wd = resource_dat['wind_resource']['wind_direction']
-   # ws = resource_dat['wind_resource']['wind_speed']
-   site = XRSite(
-          ds=xr.Dataset(data_vars=
-                           {'Sector_frequency': ('wd', freq['data']), 
-                            'Weibull_A': ('wd', A['data']), 
-                            'Weibull_k': ('wd', k['data']),
-                            'TI': resource_dat['wind_resource']['turbulence_intensity']['data']
-                            },
-                         coords={'wd': wd}))
-   timeseries = False
-   TI =  resource_dat['wind_resource']['turbulence_intensity']['data']
-else:
-   timeseries = False
-   ws = np.unique(resource_dat['wind_resource']['wind_speed'])
-   wd = np.unique(resource_dat['wind_resource']['wind_direction'])
-   P = np.array(resource_dat['wind_resource']['probability']['data'])
-   site = XRSite(ds=xr.Dataset(data_vars={'P': (['wd', 'ws'], P)}, coords = {'ws': ws, 'wd': wd, 'TI': resource_dat['wind_resource']['turbulence_intensity']['data']}))
-   TI = resource_dat['wind_resource']['turbulence_intensity']['data']
+# set up site
+A = resource_dat['wind_resource']['weibull_a']
+k = resource_dat['wind_resource']['weibull_k']
+freq = resource_dat['wind_resource']['sector_probability']
+wd = resource_dat['wind_resource']['wind_direction']
+# ws = resource_dat['wind_resource']['wind_speed']
+TI =  resource_dat['wind_resource']['turbulence_intensity']['data']
+site = XRSite(
+       ds=xr.Dataset(data_vars=
+                        {'Sector_frequency': ('wd', freq['data']), 
+                         'Weibull_A': ('wd', A['data']), 
+                         'Weibull_k': ('wd', k['data']),
+                         'TI': TI
+                         },
+                      coords={'wd': wd}))
 
 # define turbine
 hh = farm_dat['turbines']['hub_height']
@@ -118,6 +97,7 @@ cts_int = np.interp(int_speeds, ct_ws, ct)
 windTurbines = WindTurbine(name=farm_dat['turbines']['name'], diameter=rd, hub_height=hh, 
                       powerCtFunction=PowerCtTabular(int_speeds, ps_int, power_unit='W', ct=cts_int))
 
+# wake model
 if Model == 'jensen':
     wake_model = NOJ(site, windTurbines, k=0.05, rotorAvgModel=RotorCenter())
 elif Model == 'gauss':
@@ -125,12 +105,16 @@ elif Model == 'gauss':
 
 # wind resource
 dirs = np.arange(0, 360, 1) #wind directions
-speeds = np.arange(cut_in, cut_out+1, 1) # wind speeds
-freqs = site.local_wind([0], [0], wd=dirs, ws=speeds).P_ilk[0, :, :]     # all frequencies
 ws = np.arange(cut_in, cut_out+1, 1)
-
+freqs = site.local_wind([0], [0], wd=dirs, ws=ws).P_ilk[0, :, :].sum(1)     # all frequencies
+freqs = freqs / freqs.sum()
 Subs_x = system_dat['wind_farm']['electrical_substations']['electrical_substation']['coordinates']['x']
 Subs_y = system_dat['wind_farm']['electrical_substations']['electrical_substation']['coordinates']['y']
+Sub_x = {'north': Subs_x[0], 'mid': Subs_x[1], 'south': Subs_x[2]}
+Sub_y = {'north': Subs_y[0], 'mid': Subs_y[1], 'south': Subs_y[2]}
+# for sampling:
+As = site.local_wind([0], [0], wd=dirs, ws=ws).Weibull_A_ilk[0, :, 0]               #weibull A
+ks = site.local_wind([0], [0], wd=dirs, ws=ws).Weibull_k_ilk[0, :, 0]               #weibull k
 
 # Mapping for wind farms to indices
 wf = {
@@ -149,21 +133,17 @@ boundaries = {
     for name, index in wf.items()
 }
 
-# bathymetry
+# Bathymetry
 X = np.array(system_dat['site']['Bathymetry']['latitude'])
 Y = np.array(system_dat['site']['Bathymetry']['longitude'])
 Z = np.array(system_dat['site']['Bathymetry']['elevation']['data'])
-
 # Transfer from LongLat to UTM (km)
 X_utm = utm.from_latlon(np.ones(len(Y))*X[0],Y)
 Y_utm = utm.from_latlon(X,np.ones(len(X))*Y[0])
-
 # Create grids
 lon_grid, lat_grid = np.meshgrid(Y, X)
-
 # Convert to UTM
 Easting, Northing, _, _ = utm.from_latlon(lat_grid, lon_grid)
-
 # Flip arrays if necessary
 if not np.all(np.diff(Easting[0, :]) > 0):
     Easting = np.fliplr(Easting)
@@ -171,15 +151,12 @@ if not np.all(np.diff(Easting[0, :]) > 0):
 if not np.all(np.diff(Northing[:, 0]) > 0):
     Northing = np.flipud(Northing)
     Z = np.flipud(Z)
-
 # Extract coordinate arrays
 northing_values = Northing[:, 0]  # Corresponds to axis 0 of Z
 easting_values = Easting[0, :]    # Corresponds to axis 1 of Z
-
 # Ensure arrays are sorted
 assert np.all(np.diff(northing_values) > 0), "Northing values are not strictly increasing."
 assert np.all(np.diff(easting_values) > 0), "Easting values are not strictly increasing."
-
 # Create the interpolator
 interpolator = RegularGridInterpolator((northing_values, easting_values), -Z, method='cubic')
 def depth_interp(x, y):
@@ -213,8 +190,9 @@ coefficients = np.polyfit(depthmass[:, 1], depthmass[:, 0], 2)
 polynomial = np.poly1d(coefficients)
 polynomial_gradients = np.polyder(polynomial)
 
-# objective function and gradient function
-samps = 50    #number of samples 
+# SGD sampling
+sample = False
+samps = 100    #number of samples 
 site.interp_method = 'linear'
 
 # defaults
@@ -230,15 +208,30 @@ mp_cost_n = [0,0]
 SepCabling = False
 opt_nr = 1
 
+#%% Function to create the random sampling of wind speed and wind directions
+def sampling():
+    idx = np.random.choice(np.arange(dirs.size), samps, p=freqs)
+    wd = dirs[idx]
+    A = As[idx]
+    k = ks[idx]
+    ws = A * np.random.weibull(k)
+    return wd, ws
+
 #%% Objective function
 def lcoe_func(x, y, **kwargs):
-    global metrics_recorder, aep, cable_cost, dcable_cost, mp_cost, dmp_cost, cable_cost_n, cable_u_n, cable_v_n, cable_type_n, mp_cost_n
+    global metrics_recorder, aep, cable_cost, dcable_cost, mp_cost, dmp_cost, cable_cost_n, cable_u_n, cable_v_n, cable_type_n, mp_cost_n, wd_current, ws_current, Time
     # 1.) aep
-    wd = np.arange(0, 360, 1)
-    if nf:
-        aep = wake_model(x=np.concatenate((x,xn)), y=np.concatenate((y,yn)), wd=wd, ws=ws, TI=TI).aep() * 1e3
+    if sample:
+        wd_current, ws_current = sampling()
+        Time = True
     else:
-        aep = wake_model(x=x, y=y, wd=wd, ws=ws, TI=TI).aep() * 1e3
+        wd_current = np.arange(0, 360, 1)
+        ws_current = ws
+        Time = False
+    if nf:
+        aep = wake_model(x=np.concatenate((x,xn)), y=np.concatenate((y,yn)), wd=wd_current, ws=ws_current, TI=TI, time=Time).aep() * 1e3
+    else:
+        aep = wake_model(x=x, y=y, wd=wd_current, ws=ws_current, TI=TI, time=Time).aep() * 1e3
         # aep = xr.DataArray(np.sum(aep, axis=(1, 2)), dims=["wt"])
     #
     # 2.) monopile costs
@@ -272,6 +265,16 @@ def lcoe_func(x, y, **kwargs):
         cab_data1 = G1.get_table()
         cab_data2 = G2.get_table()
         cab_data3 = G3.get_table()
+        metrics_recorder["cable_u_" + Sequence[0]].append(cab_data1['u'].tolist())
+        metrics_recorder["cable_v_" + Sequence[0]].append(cab_data1['v'].tolist())
+        metrics_recorder["cable_u_" + Sequence[1]].append(cab_data2['u'].tolist())
+        metrics_recorder["cable_v_" + Sequence[1]].append(cab_data2['v'].tolist())
+        metrics_recorder["cable_u_" + Sequence[2]].append(cab_data3['u'].tolist())
+        metrics_recorder["cable_v_" + Sequence[2]].append(cab_data3['v'].tolist())
+        metrics_recorder["cable_type_" + Sequence[0]].append(cab_data1['cable'].tolist())
+        metrics_recorder["cable_type_" + Sequence[1]].append(cab_data2['cable'].tolist())
+        metrics_recorder["cable_type_" + Sequence[2]].append(cab_data3['cable'].tolist())
+        #
         metrics_recorder["cable_u"].append([x+len(Sx)-1 if x != 1 else x for x in cab_data1['u'].tolist()] + [x+len(Sx)-1+tur_nr[0] if x != 1 else x+1 for x in cab_data2['u'].tolist()] + [x+len(Sx)-1+sum(tur_nr[0:2]) if x != 1 else x+2 for x in cab_data3['u'].tolist()])
         metrics_recorder["cable_v"].append([y+len(Sx)-1 if y != 1 else y for y in cab_data1['v'].tolist()] + [y+len(Sx)-1+tur_nr[0] if y != 1 else y++1 for y in cab_data2['v'].tolist()] + [y+len(Sx)-1+sum(tur_nr[0:2]) if y != 1 else y+2 for y in cab_data3['v'].tolist()])
         metrics_recorder["cable_type"].append(cab_data1['cable'].tolist() + cab_data2['cable'].tolist() + cab_data3['cable'].tolist())
@@ -289,9 +292,9 @@ def lcoe_func(x, y, **kwargs):
         cable_cost = G.cost     # in Euro
         # for recorder
         cab_data = G.get_table()
-        metrics_recorder["cable_u"].append(cab_data['u'].tolist())
-        metrics_recorder["cable_v"].append(cab_data['v'].tolist())
-        metrics_recorder["cable_type"].append(cab_data['cable'].tolist())
+        metrics_recorder["cable_u_" + curzone].append(cab_data['u'].tolist())
+        metrics_recorder["cable_v_" + curzone].append(cab_data['v'].tolist())
+        metrics_recorder["cable_type_" + curzone].append(cab_data['cable'].tolist())
         # gradients (for function later, to avoid double calculus)
         dcable_length, dcable_cost = wfn.gradient(node_type='wind_turbines')
     # !! ToDo: Scale costs to same currency and year of reference
@@ -309,11 +312,15 @@ def lcoe_func(x, y, **kwargs):
     metrics_recorder["mp_cost"].append(sum(mp_cost))
     metrics_recorder["cable_cost"].append(cable_cost)
     metrics_recorder["lcoe"].append(lcoe)
-    metrics_recorder["x"].append(x)
-    metrics_recorder["y"].append(y)
     # performance of individual zones
     if Mode == 'cooperative':
         # store the values of the individual zones
+        metrics_recorder["x_north"].append(x[:tur_nr[0]].flatten().tolist())
+        metrics_recorder["y_north"].append(y[:tur_nr[0]].flatten().tolist())
+        metrics_recorder["x_mid"].append(x[tur_nr[0]:sum(tur_nr[0:2])].flatten().tolist())
+        metrics_recorder["y_mid"].append(y[tur_nr[0]:sum(tur_nr[0:2])].flatten().tolist())
+        metrics_recorder["x_south"].append(x[sum(tur_nr[0:2]):].flatten().tolist())
+        metrics_recorder["y_south"].append(y[sum(tur_nr[0:2]):].flatten().tolist())
         mp_cost1 = np.sum(mp_cost[:tur_nr[0]])
         mp_cost2 = np.sum(mp_cost[tur_nr[0]:sum(tur_nr[0:2])])
         mp_cost3 = np.sum(mp_cost[sum(tur_nr[0:2]):])
@@ -345,8 +352,10 @@ def lcoe_func(x, y, **kwargs):
         metrics_recorder["lcoe_mid"].append(lcoe2)
         metrics_recorder["lcoe_south"].append(lcoe3)
         metrics_recorder["lcoe_all"].append(lcoe)
-    elif Mode == 'competitive':
+    elif Mode == 'competitive' or Mode == 'evaluate_sequ':
         # current zone
+        metrics_recorder["x_" + curzone].append(x.flatten().tolist())
+        metrics_recorder["y_" + curzone].append(y.flatten().tolist())
         metrics_recorder["aep_" + curzone].append(aep.isel(wt=slice(0,tur_nr[wf[curzone]])).sum().item())
         metrics_recorder["cable_cost_" + curzone].append(cable_cost)
         metrics_recorder["mp_cost_" + curzone].append(sum(mp_cost))
@@ -378,16 +387,6 @@ def lcoe_func(x, y, **kwargs):
         metrics_recorder["cable_cost_all"].append(sum(cable_cost_n) + cable_cost)
         metrics_recorder["mp_cost_all"].append(sum(mp_cost_n) + sum(mp_cost))
         metrics_recorder["lcoe_all"].append(sum(npv_all)/np.sum(aep).item())
-        
-        # for cabling plan, add cabling of foregoing optimization
-        if len(nb) == 1:
-            metrics_recorder["cable_u"][-1] = [x+1+tur_nr[wf[curzone]] if x != 1 else x for x in cable_u_n[0]] + [x+1 for x in metrics_recorder["cable_u"][-1]]
-            metrics_recorder["cable_v"][-1] = [y+1+tur_nr[wf[curzone]] if y != 1 else y for y in cable_v_n[0]] + [y+1 for y in metrics_recorder["cable_v"][-1]]
-            metrics_recorder["cable_type"][-1] = cable_type_n[0] + metrics_recorder["cable_type"][-1]
-        elif len(nb) == 2:
-            metrics_recorder["cable_u"][-1] = [x+2+tur_nr[wf[curzone]] if x != 1 else x for x in cable_u_n[0]] + [x+2+tur_nr[wf[curzone]]+tur_nr[wf[nb[0]]] if x != 1 else x+1 for x in cable_u_n[1]] + [x+2 for x in metrics_recorder["cable_u"][-1]]
-            metrics_recorder["cable_v"][-1] = [y+2+tur_nr[wf[curzone]] if y != 1 else y for y in cable_v_n[0]] + [y+2+tur_nr[wf[curzone]]+tur_nr[wf[nb[0]]] if y != 1 else y+1 for y in cable_v_n[1]] + [y+2 for y in metrics_recorder["cable_v"][-1]]
-            metrics_recorder["cable_type"][-1] = cable_type_n[0] + cable_type_n[1] + metrics_recorder["cable_type"][-1]
     # for global variable
     aep = aep.isel(wt=slice(0,len(x))).sum().item()
     return lcoe # $/MWh
@@ -405,13 +404,13 @@ def get_depth_grads(x, y):
     return np.array(grads)
 
 def lcoe_jac(x, y, **kwargs):
-    global aep, cable_cost, dcable_cost, mp_cost, dmp_cost
+    global aep, cable_cost, dcable_cost, mp_cost, dmp_cost, wd_current, ws_current, Time
     # 1.) aep
-    wd = np.arange(0, 360, 1)
+    # wd = np.arange(0, 360, 1)
     if nf:
-        daep = wake_model.aep_gradients(gradient_method=autograd, wrt_arg=['x', 'y'], x=np.concatenate((x,xn)), y=np.concatenate((y,yn)), ws=ws, TI=TI, wd=wd)[:tur_nr[wf[curzone]],:tur_nr[wf[curzone]]] * 1e3
+        daep = wake_model.aep_gradients(gradient_method=autograd, wrt_arg=['x', 'y'], x=np.concatenate((x,xn)), y=np.concatenate((y,yn)), ws=ws_current, TI=TI, wd=wd_current, time=Time)[:tur_nr[wf[curzone]],:tur_nr[wf[curzone]]] * 1e3
     else:
-        daep = wake_model.aep_gradients(gradient_method=autograd, wrt_arg=['x', 'y'], x=x, y=y, ws=ws, TI=TI, wd=wd) * 1e3
+        daep = wake_model.aep_gradients(gradient_method=autograd, wrt_arg=['x', 'y'], x=x, y=y, ws=ws_current, TI=TI, wd=wd_current, time=Time) * 1e3
     #
     # 2.) monopile costs
     # have been calculated earlier (global variable)
@@ -466,6 +465,7 @@ min_spacing_m = 2 * windTurbines.diameter()  #minimum inter-turbine spacing in m
 
 #%% Recorder
 metrics_recorder = {
+    "sequence": Sequence,
     "iteration": [],
     "opt_nr": [],
     "aep": [],
@@ -474,7 +474,16 @@ metrics_recorder = {
     "lcoe": [],
     "cable_u": [],
     "cable_v": [],
+    "cable_u_north": [],
+    "cable_u_mid": [],
+    "cable_u_south": [],
+    "cable_v_north": [],
+    "cable_v_mid": [],
+    "cable_v_south": [],
     "cable_type": [],
+    "cable_type_north": [],
+    "cable_type_mid": [],
+    "cable_type_south": [],
     "aep_north": [],
     "aep_mid": [],
     "aep_south": [],
@@ -491,8 +500,12 @@ metrics_recorder = {
     "lcoe_mid": [],
     "lcoe_south": [],
     "lcoe_all": [],
-    "x": [],
-    "y": [],
+    "x_north": [],
+    "y_north": [],
+    "x_mid": [],
+    "y_mid": [],
+    "x_south": [],
+    "y_south": [],
     "x_final": [],
     "y_final": [],
     "lcoe_final": []
@@ -530,6 +543,7 @@ if Mode == 'cooperative':
     )
 
     # Options
+    sample = True
     SepCabling = True       # Indicate if cabling is only allowed within each zone or cross-zonal
     Sx = Subs_x
     Sy = Subs_y
@@ -540,7 +554,7 @@ if Mode == 'cooperative':
             cost_comp = CostModelComponent(input_keys=['x','y'], n_wt=sum(tur_nr), cost_function=lcoe_func, objective=True, cost_gradient_function=lcoe_jac, maximize=False),
             constraints = DistanceConstraintAggregation([SpacingConstraint(min_spacing_m), joint_boundaries], sum(tur_nr), min_spacing_m, windTurbines), 
             driver = EasySGDDriver(maxiter=3000, learning_rate=windTurbines.diameter(), max_time=1008000, gamma_min_factor=0.1, speedupSGD=True, sgd_thresh=0.12),
-            plot_comp = XYPlotCompBathym(save_plot_per_iteration=True, plot_initial=False, memory=0, X=X_utm, Y=Y_utm, Z=Z, Sx=Sx, Sy=Sy, cables=cables, metrics_recorder=metrics_recorder, Xn=xn, Yn=yn, b=[]),
+            plot_comp = XYPlotCompBathym(save_plot_per_iteration=True, plot_initial=False, memory=0, X=X_utm, Y=Y_utm, Z=Z, Sx=Sub_x, Sy=Sub_y, cables=cables, metrics_recorder=metrics_recorder, Xn=xn, Yn=yn, b=[]),
             )
     
     # Run
@@ -586,6 +600,7 @@ if Mode == 'cooperative':
 #%% Competitive design
 elif Mode == 'competitive':
     # general options
+    sample = True
     SepCabling = False
     boundplot = list(boundaries.values())
     plot_folder = "Figures_" + ''.join([entry[0] for entry in Sequence])
@@ -625,9 +640,6 @@ elif Mode == 'competitive':
                 xn = np.concatenate([xn, res_x[nb[j]].tolist()])
                 yn = np.concatenate([yn, res_y[nb[j]].tolist()])
                 cable_cost_n[j] = res_cable_cost[nb[j]]
-                cable_u_n[j] = res_cable_u[nb[j]]
-                cable_v_n[j] = res_cable_v[nb[j]]
-                cable_type_n[j] = res_cable_type[nb[j]]
                 mp_cost_n [j]= res_mp_cost[nb[j]]
             
         # Optimization Setup
@@ -636,8 +648,7 @@ elif Mode == 'competitive':
                 cost_comp = CostModelComponent(input_keys=['x','y'], n_wt=tur_nr[wf[Sequence[i]]], cost_function=lcoe_func, objective=True, cost_gradient_function=lcoe_jac, maximize=False),
                 constraints = DistanceConstraintAggregation([SpacingConstraint(min_spacing_m), constraint_comp],tur_nr[wf[Sequence[i]]], min_spacing_m, windTurbines), 
                 driver = EasySGDDriver(maxiter=3000, learning_rate=windTurbines.diameter(), max_time=1008000, gamma_min_factor=0.1, speedupSGD=True, sgd_thresh=0.12),
-                plot_comp = XYPlotCompBathym(save_plot_per_iteration=True, plot_initial=False, memory=0, X=X_utm, Y=Y_utm, Z=Z,Sx=[Subs_x[wf[nb]] for nb in nb]+[Subs_x[wf[curzone]]],
-                                             Sy=[Subs_y[wf[nb]] for nb in nb]+[Subs_y[wf[curzone]]], cables=cables, metrics_recorder=metrics_recorder, Xn=xn, Yn=yn, b=boundplot, opt_nr=opt_nr, folder=plot_folder)
+                plot_comp = XYPlotCompBathym(save_plot_per_iteration=True, plot_initial=False, memory=0, X=X_utm, Y=Y_utm, Z=Z, Sx=Sub_x, Sy=Sub_y, cables=cables, metrics_recorder=metrics_recorder, Xn=xn, Yn=yn, b=boundplot, opt_nr=opt_nr, folder=plot_folder, sampling=sample)
                 )
         
         # Run
@@ -653,9 +664,6 @@ elif Mode == 'competitive':
         res_x[Sequence[i]] = state['x']
         res_y[Sequence[i]] = state['y']
         res_cable_cost[Sequence[i]] = metrics_recorder['cable_cost'][-1]
-        res_cable_u[Sequence[i]] = [x-len(nb) for x in metrics_recorder["cable_u"][-1][-tur_nr[wf[Sequence[i]]]:]]
-        res_cable_v[Sequence[i]] = [y-len(nb) for y in metrics_recorder["cable_v"][-1][-tur_nr[wf[Sequence[i]]]:]]
-        res_cable_type[Sequence[i]] = metrics_recorder['cable_type'][-1][-tur_nr[wf[Sequence[i]]]:]
         res_mp_cost[Sequence[i]] = metrics_recorder['mp_cost'][-1]
         
         # Save recorder to file
