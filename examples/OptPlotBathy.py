@@ -30,7 +30,7 @@ class XYPlotCompBathym(ExplicitComponent):
     # colors = ['b', 'r', 'm', 'c', 'g', 'y', 'orange', 'indigo', 'grey'] * 100
     colors = [c['color'] for c in iter(matplotlib.rcParams['axes.prop_cycle'])] * 100
 
-    def __init__(self, memory=10, delay=0.001, plot_initial=True, plot_improvements_only=False, ax=None, legendloc=1, save_plot_per_iteration=False, X=None, Y=None, Z=None, Sx=None, Sy=None, cables=None, metrics_recorder=None, Xn=[], Yn=[], b=[], opt_nr=None, folder='Figures', sampling=False):
+    def __init__(self, memory=10, delay=0.001, plot_initial=True, plot_improvements_only=False, ax=None, legendloc=1, save_plot_per_iteration=False, X=None, Y=None, Z=None, Sx=None, Sy=None, cables=None, metrics_recorder=None, Xn=[], Yn=[], b=[], opt_nr=None, folder='Figures', sampling=False, obj=None, optimize=True):
         """Initialize component for plotting turbine locations
 
         Parameters
@@ -73,6 +73,8 @@ class XYPlotCompBathym(ExplicitComponent):
         self.opt_nr = opt_nr
         self.folder = folder
         self.sampling = sampling
+        self.obj = obj
+        self.optimize = optimize
     @property
     def ax(self):
         return self._ax or plt.gca()
@@ -214,18 +216,27 @@ class XYPlotCompBathym(ExplicitComponent):
         self.ax.scatter(list(self.Sx.values()),list(self.Sy.values()),marker='s',s=7,color='k', zorder=3,label='Substation')
     def set_title(self):
         # Overall optimization
-        title = "\nIteration: %d"  % (self.metrics_recorder['iteration'][-1]-1)
+        if self.opt_nr:
+            title = "\nIteration: %d"  % (self.metrics_recorder['iteration'][-1]-1)
+        else:
+            title = 'Final results'
         # Plot lcoe if no sampling
-        if not self.sampling:
+        if not self.sampling and self.obj:
+            if self.obj == 'lcoe':
+                unit = '$/MWh'
+                divider = 1
+            else:
+                unit = 'GWh'
+                divider = 1000
             # For sequential layout, add overall LCOE
-            title += "\n" + "Overall LCOE" + " = %.2f $/MWh (%+.2f%%)" % (self.metrics_recorder['lcoe_all'][-1], (self.metrics_recorder['lcoe_all'][-1] - self.metrics_recorder['lcoe_all'][0]) / self.metrics_recorder['lcoe_all'][0] * 100)
+            title += "\n" + "Overall " + self.obj + " = %.2f %s (%+.2f%%)" % (self.metrics_recorder[self.obj + '_all'][-1] / divider, unit, (self.metrics_recorder[self.obj + '_all'][-1] - self.metrics_recorder[self.obj + '_all'][0]) / self.metrics_recorder[self.obj + '_all'][0] * 100)
             #
             items = ['north','mid','south']
             for idx, zone in enumerate(items):
-                if self.metrics_recorder['lcoe_' + zone][-1] != 0:
-                    title += " \n LCOE " + zone + " = %.2f $/MWh (%+.2f%%)" % (self.metrics_recorder['lcoe_' + zone][-1], (self.metrics_recorder['lcoe_' + zone][-1] - self.metrics_recorder['lcoe_' + zone][next(i for i, value in enumerate(self.metrics_recorder['lcoe_' + zone]) if value != 0)]) / (self.metrics_recorder['lcoe_' + zone][next(i for i, value in enumerate(self.metrics_recorder['lcoe_' + zone]) if value != 0)]) * 100)
+                if self.metrics_recorder[self.obj + '_' + zone][-1] != 0:
+                    title += " \n" + self.obj + ' ' + zone + " = %.2f %s (%+.2f%%)" % (self.metrics_recorder[self.obj + '_' + zone][-1] / divider, unit, (self.metrics_recorder[self.obj + '_' + zone][-1] - self.metrics_recorder[self.obj + '_' + zone][next(i for i, value in enumerate(self.metrics_recorder[self.obj + '_' + zone]) if value != 0)]) / (self.metrics_recorder[self.obj + '_' + zone][next(i for i, value in enumerate(self.metrics_recorder[self.obj + '_' + zone]) if value != 0)]) * 100)
                 else:
-                    title += " \n LCOE " + zone + " = - $/MWh (-%)"
+                    title += " \n" + self.obj + " " + zone + " = - " + unit + " (-%)"
         self.ax.set_title(title,fontsize=9)
         
     def get_initial(self):
@@ -246,12 +257,14 @@ class XYPlotCompBathym(ExplicitComponent):
                     return np.min(self.problem.design_vars[key][1]), np.max(np.min(self.problem.design_vars[key][2]))
                 else:
                     return min(inputs[key]), max(inputs[key])
-            min_x, max_x = get_lim('x')
-            min_y, max_y = get_lim('y')
-            # min_x = min(inputs['x'])
-            # max_x = max(inputs['x'])
-            # min_y = min(inputs['y'])
-            # max_y = max(inputs['y'])
+            if self.optimize:
+                min_x, max_x = get_lim('x')
+                min_y, max_y = get_lim('y')
+            else:
+                min_x = min(inputs['x'])
+                max_x = max(inputs['x'])
+                min_y = min(inputs['y'])
+                max_y = max(inputs['y'])
             self.init_plot(np.array([[min_x, min_y], [max_x, max_y]]))
             
             self.plot_bathymetry()
@@ -259,7 +272,8 @@ class XYPlotCompBathym(ExplicitComponent):
             if len(self.b) > 0:
                 self.plot_boundaries()
             
-            self.plot_constraints()
+            if self.optimize:
+                self.plot_constraints()
 
             x = inputs['x']
             y = inputs['y']
@@ -289,8 +303,11 @@ class XYPlotCompBathym(ExplicitComponent):
                 plt.pause(1e-6)
             mypause(self.delay)
             
-            self.counter += 1
-            outputs['plot_counter'] = self.counter
+            if self.optimize:
+                self.counter += 1
+                outputs['plot_counter'] = self.counter
+            else:
+                self.counter = self.opt_nr
 
             if self.save_plot_per_iteration:
                 if not os.path.exists(self.folder):
