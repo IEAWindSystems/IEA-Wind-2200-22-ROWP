@@ -37,6 +37,7 @@ Model = 'gauss'
 plot_conv = True
 tur_nr = [33,33,34]     # Desired turbine number in optimized farm, from north to south!
 obj = 'lcoe'            # 'lcoe' or 'aep'
+plot_iter = True
 
 # monopile optimization
 MP_ref = 1          # reference turbine type for monopile mass scaling. 0 = 10MW, 1 = 15MW, 2 = 3.4MW
@@ -582,7 +583,7 @@ if Mode == 'cooperative':
             design_vars = {'x':x0, 'y':y0},         
             cost_comp = CostModelComponent(input_keys=['x','y'], n_wt=sum(tur_nr), cost_function=lcoe_func, objective=True, cost_gradient_function=lcoe_jac, maximize=False),
             constraints = DistanceConstraintAggregation([SpacingConstraint(min_spacing_m), joint_boundaries], sum(tur_nr), min_spacing_m, windTurbines), 
-            driver = EasySGDDriver(maxiter=3000, learning_rate=windTurbines.diameter(), max_time=1008000, gamma_min_factor=0.1, speedupSGD=True, sgd_thresh=0.12),
+            driver = EasySGDDriver(maxiter=3000, learning_rate=windTurbines.diameter()*0.2, speedupSGD=True, sgd_thresh=0.02),
             plot_comp = XYPlotCompBathym(save_plot_per_iteration=True, plot_initial=False, memory=0, X=X_utm, Y=Y_utm, Z=Z, Sx=Sub_x, Sy=Sub_y, cables=cables, metrics_recorder=metrics_recorder, Xn=xn, Yn=yn, b=[]),
             )
     
@@ -633,7 +634,7 @@ elif Mode == 'competitive':
     SepCabling = False
     boundplot = list(boundaries.values())
     plot_folder = "Figures_" + ''.join([entry[0] for entry in Sequence])
-    
+        
     # go through each zone as specified in Sequence
     for i in range(len(Sequence)):
         opt_nr = i+1
@@ -667,15 +668,34 @@ elif Mode == 'competitive':
                 yn = np.concatenate([yn, metrics_recorder['y_' + zone][-1]])
                 cable_cost_n[j] = metrics_recorder['cable_cost_' + zone][-1]
                 mp_cost_n[j]= metrics_recorder['mp_cost_' + zone][-1]
-            
+        
+        # Plot or not
+        if plot_iter:
+            plot_comp = XYPlotCompBathym(save_plot_per_iteration=True, plot_initial=False, memory=0, X=X_utm, Y=Y_utm, Z=Z, Sx=Sub_x, Sy=Sub_y, cables=cables, metrics_recorder=metrics_recorder, Xn=xn, Yn=yn, b=boundplot, opt_nr=opt_nr, folder=plot_folder, sampling=sample, obj=obj)
+        else:
+            plot_comp = None
+        
+        # Max or min
+        if obj == 'lcoe':
+            maximize = False
+        elif obj == 'aep':
+            maximize = True
+        
+        # change initial learning rate if iterative sequential optimization
+        if i < len(list(set(Sequence))):
+            learning_rate = windTurbines.diameter()*0.2
+        elif i < 2*len(list(set(Sequence))):
+            learning_rate = windTurbines.diameter()*0.01
+        else:
+            learning_rate = windTurbines.diameter()*0.005
+        
         # Optimization Setup
         tf = TopFarmProblem(
                 design_vars = {'x':x0, 'y':y0},         
-                cost_comp = CostModelComponent(input_keys=['x','y'], n_wt=tur_nr[wf[Sequence[i]]], cost_function=lcoe_func, objective=True, cost_gradient_function=lcoe_jac, maximize=False),
+                cost_comp = CostModelComponent(input_keys=['x','y'], n_wt=tur_nr[wf[Sequence[i]]], cost_function=lcoe_func, objective=True, cost_gradient_function=lcoe_jac, maximize=maximize),
                 constraints = DistanceConstraintAggregation([SpacingConstraint(min_spacing_m), constraint_comp],tur_nr[wf[Sequence[i]]], min_spacing_m, windTurbines), 
-                driver = EasySGDDriver(maxiter=3000, learning_rate=windTurbines.diameter(), max_time=1008000, gamma_min_factor=0.1, speedupSGD=True, sgd_thresh=0.12),
-                plot_comp = XYPlotCompBathym(save_plot_per_iteration=True, plot_initial=False, memory=0, X=X_utm, Y=Y_utm, Z=Z, Sx=Sub_x, Sy=Sub_y, cables=cables, metrics_recorder=metrics_recorder, Xn=xn, Yn=yn, b=boundplot, opt_nr=opt_nr, folder=plot_folder, sampling=sample, obj=obj)
-                )
+                driver = EasySGDDriver(maxiter=3000, learning_rate=learning_rate, speedupSGD=True, sgd_thresh=0.02),
+                plot_comp = plot_comp)
         
         # Run
         tic = time.time()
