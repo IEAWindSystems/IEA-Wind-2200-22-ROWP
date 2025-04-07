@@ -30,7 +30,7 @@ class XYPlotCompBathym(ExplicitComponent):
     # colors = ['b', 'r', 'm', 'c', 'g', 'y', 'orange', 'indigo', 'grey'] * 100
     colors = [c['color'] for c in iter(matplotlib.rcParams['axes.prop_cycle'])] * 100
 
-    def __init__(self, memory=10, delay=0.001, plot_initial=True, plot_improvements_only=False, ax=None, legendloc=1, save_plot_per_iteration=False, X=None, Y=None, Z=None, Sx=None, Sy=None, cables=None, metrics_recorder=None, Xn=[], Yn=[], b=[], opt_nr=None, folder='Figures', sampling=False, obj=None, optimize=True):
+    def __init__(self, memory=10, delay=0.001, plot_initial=True, plot_improvements_only=False, ax=None, legendloc=1, save_plot_per_iteration=False, X=None, Y=None, Z=None, Sx=None, Sy=None, cables=None, metrics_recorder=None, Xn=[], Yn=[], b=[], opt_nr=None, folder='Figures', sampling=False, obj=None, optimize=True, ploteach=1):
         """Initialize component for plotting turbine locations
 
         Parameters
@@ -75,6 +75,7 @@ class XYPlotCompBathym(ExplicitComponent):
         self.sampling = sampling
         self.obj = obj
         self.optimize = optimize
+        self.ploteach = ploteach
     @property
     def ax(self):
         return self._ax or plt.gca()
@@ -248,7 +249,7 @@ class XYPlotCompBathym(ExplicitComponent):
             return pw['x0'], pw['y0'], cost0
 
     def compute(self, inputs, outputs):
-        if self.by_pass is False:
+        if (self.metrics_recorder['iteration'][-1]-1) % self.ploteach == 0:
             # find limits
             def get_lim(key):
                 if (key in self.problem.design_vars and
