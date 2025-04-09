@@ -163,7 +163,7 @@ easting_values = Easting[0, :]    # Corresponds to axis 1 of Z
 assert np.all(np.diff(northing_values) > 0), "Northing values are not strictly increasing."
 assert np.all(np.diff(easting_values) > 0), "Easting values are not strictly increasing."
 # Create the interpolator
-interpolator = RegularGridInterpolator((northing_values, easting_values), -Z, method='cubic')
+interpolator = RegularGridInterpolator((northing_values, easting_values), -Z, method='linear')
 def depth_interp(x, y):
     return interpolator(np.array([y, x]).T)
 
