@@ -10,7 +10,6 @@ import pickle
 from py_wake.site import XRSite
 from py_wake.wind_turbines import WindTurbine
 from py_wake.wind_turbines.power_ct_functions import PowerCtTabular
-from py_wake.examples.data.hornsrev1 import Hornsrev1Site
 from py_wake import NOJ, BastankhahGaussian
 from topfarm.cost_models.cost_model_wrappers import CostModelComponent
 from topfarm.easy_drivers import EasySGDDriver
@@ -27,6 +26,7 @@ from ssms.CalculateMass import CalculateMass
 from ed_win.wind_farm_network import WindFarmNetwork
 from shapely.geometry import Point, Polygon
 from topfarm.constraint_components.boundary import MultiWFPolygonBoundaryConstraint
+from RecordFunc import create_recorder, record_cable_metrics_singlesub, record_cable_metrics_multisub, record_main_metrics_multisub, record_main_metrics_singlesub
 np.random.seed(2)
 #
 #%% INPUTS
@@ -37,7 +37,7 @@ Model = 'gauss'
 plot_conv = True
 tur_nr = [33,33,34]     # Desired turbine number in optimized farm, from north to south!
 obj = 'lcoe'            # 'lcoe' or 'aep'
-plot_iter = True
+plot_iter = False
 plot_each = 10          # define in which interval a plot should be made
 
 # monopile optimization
@@ -137,6 +137,7 @@ boundaries = {
     for name, index in wf.items()
 }
 
+#%% Setup monopile calculus and optimizer
 # Bathymetry
 X = np.array(system_dat['site']['Bathymetry']['latitude'])
 Y = np.array(system_dat['site']['Bathymetry']['longitude'])
@@ -269,19 +270,7 @@ def lcoe_func(x, y, **kwargs):
         cab_data1 = G1.get_table()
         cab_data2 = G2.get_table()
         cab_data3 = G3.get_table()
-        metrics_recorder["cable_u_" + Sequence[0]].append(cab_data1['u'].tolist())
-        metrics_recorder["cable_v_" + Sequence[0]].append(cab_data1['v'].tolist())
-        metrics_recorder["cable_u_" + Sequence[1]].append(cab_data2['u'].tolist())
-        metrics_recorder["cable_v_" + Sequence[1]].append(cab_data2['v'].tolist())
-        metrics_recorder["cable_u_" + Sequence[2]].append(cab_data3['u'].tolist())
-        metrics_recorder["cable_v_" + Sequence[2]].append(cab_data3['v'].tolist())
-        metrics_recorder["cable_type_" + Sequence[0]].append(cab_data1['cable'].tolist())
-        metrics_recorder["cable_type_" + Sequence[1]].append(cab_data2['cable'].tolist())
-        metrics_recorder["cable_type_" + Sequence[2]].append(cab_data3['cable'].tolist())
-        #
-        metrics_recorder["cable_u"].append([x+len(Sx)-1 if x != 1 else x for x in cab_data1['u'].tolist()] + [x+len(Sx)-1+tur_nr[0] if x != 1 else x+1 for x in cab_data2['u'].tolist()] + [x+len(Sx)-1+sum(tur_nr[0:2]) if x != 1 else x+2 for x in cab_data3['u'].tolist()])
-        metrics_recorder["cable_v"].append([y+len(Sx)-1 if y != 1 else y for y in cab_data1['v'].tolist()] + [y+len(Sx)-1+tur_nr[0] if y != 1 else y++1 for y in cab_data2['v'].tolist()] + [y+len(Sx)-1+sum(tur_nr[0:2]) if y != 1 else y+2 for y in cab_data3['v'].tolist()])
-        metrics_recorder["cable_type"].append(cab_data1['cable'].tolist() + cab_data2['cable'].tolist() + cab_data3['cable'].tolist())
+        record_cable_metrics_multisub(metrics_recorder, Sequence, cab_data1, cab_data2, cab_data3, Sx, tur_nr)
         # gradients (for function later, to avoid double calculus)
         dcable_length1, dcable_cost1 = wfn1.gradient(node_type='wind_turbines')
         dcable_length2, dcable_cost2 = wfn2.gradient(node_type='wind_turbines')
@@ -296,17 +285,7 @@ def lcoe_func(x, y, **kwargs):
         cable_cost = G.cost     # in Euro
         # for recorder
         cab_data = G.get_table()
-        metrics_recorder["cable_u_" + curzone].append(cab_data['u'].tolist())
-        metrics_recorder["cable_v_" + curzone].append(cab_data['v'].tolist())
-        metrics_recorder["cable_type_" + curzone].append(cab_data['cable'].tolist())
-        for _, zone in enumerate(nnb):
-            metrics_recorder["cable_u_" + zone].append([])
-            metrics_recorder["cable_v_" + zone].append([])
-            metrics_recorder["cable_type_" + zone].append([])
-        for _, zone in enumerate(nb):
-            metrics_recorder["cable_u_" + zone].append(metrics_recorder['cable_u_' + zone][-1])
-            metrics_recorder["cable_v_" + zone].append(metrics_recorder['cable_v_' + zone][-1])
-            metrics_recorder["cable_type_" + zone].append(metrics_recorder['cable_type_' + zone][-1])
+        record_cable_metrics_singlesub(metrics_recorder, cab_data, curzone, nnb, nb)
         # gradients (for function later, to avoid double calculus)
         dcable_length, dcable_cost = wfn.gradient(node_type='wind_turbines')
     # !! ToDo: Scale costs to same currency and year of reference
@@ -318,93 +297,13 @@ def lcoe_func(x, y, **kwargs):
     lcoe = npv / aep.isel(wt=slice(0,len(x))).sum().item()
     #
     # 5. Record the missing metrics
-    metrics_recorder["iteration"].append(kwargs.get("iteration", len(metrics_recorder["iteration"]) + 1))
-    metrics_recorder["opt_nr"].append(opt_nr)
-    metrics_recorder["aep"].append(aep.isel(wt=slice(0,len(x))).sum().item())
-    metrics_recorder["mp_cost"].append(sum(mp_cost))
-    metrics_recorder["cable_cost"].append(cable_cost)
-    metrics_recorder["lcoe"].append(lcoe)
-    # performance of individual zones
     if Mode == 'cooperative':
-        # store the values of the individual zones
-        metrics_recorder["x_north"].append(x[:tur_nr[0]].flatten().tolist())
-        metrics_recorder["y_north"].append(y[:tur_nr[0]].flatten().tolist())
-        metrics_recorder["x_mid"].append(x[tur_nr[0]:sum(tur_nr[0:2])].flatten().tolist())
-        metrics_recorder["y_mid"].append(y[tur_nr[0]:sum(tur_nr[0:2])].flatten().tolist())
-        metrics_recorder["x_south"].append(x[sum(tur_nr[0:2]):].flatten().tolist())
-        metrics_recorder["y_south"].append(y[sum(tur_nr[0:2]):].flatten().tolist())
-        mp_cost1 = np.sum(mp_cost[:tur_nr[0]])
-        mp_cost2 = np.sum(mp_cost[tur_nr[0]:sum(tur_nr[0:2])])
-        mp_cost3 = np.sum(mp_cost[sum(tur_nr[0:2]):])
-        cable_cost1 = G1.cost
-        cable_cost2 = G2.cost 
-        cable_cost3 = G3.cost
-        npv1 = (capex*tur_nr[0] + mp_cost1 + cable_cost1 + LP*tur_nr[0]) * CRF + OpexAnnual*tur_nr[0]
-        npv2 = (capex*tur_nr[1] + mp_cost2 + cable_cost2 + LP*tur_nr[1]) * CRF + OpexAnnual*tur_nr[1]
-        npv3 = (capex*tur_nr[2] + mp_cost3 + cable_cost3 + LP*tur_nr[2]) * CRF + OpexAnnual*tur_nr[2]
-        aep1 = aep.isel(wt=slice(0,tur_nr[0])).sum().item()
-        aep2 = aep.isel(wt=slice(tur_nr[0],sum(tur_nr[0:2]))).sum().item()
-        aep3 = aep.isel(wt=slice(sum(tur_nr[0:2]),None)).sum().item()
-        lcoe1 = npv1 / aep1
-        lcoe2 = npv2 / aep2
-        lcoe3 = npv3 / aep3
-        metrics_recorder["aep_north"].append(aep1)
-        metrics_recorder["aep_mid"].append(aep2)
-        metrics_recorder["aep_south"].append(aep3)
-        metrics_recorder["aep_all"].append(np.sum(aep).item())
-        metrics_recorder["cable_cost_north"].append(cable_cost1)
-        metrics_recorder["cable_cost_mid"].append(cable_cost2)
-        metrics_recorder["cable_cost_south"].append(cable_cost3)
-        metrics_recorder["cable_cost_all"].append(cable_cost)
-        metrics_recorder["mp_cost_north"].append(mp_cost1)
-        metrics_recorder["mp_cost_mid"].append(mp_cost2)
-        metrics_recorder["mp_cost_south"].append(mp_cost3)
-        metrics_recorder["mp_cost_all"].append(sum(mp_cost))
-        metrics_recorder["lcoe_north"].append(lcoe1)
-        metrics_recorder["lcoe_mid"].append(lcoe2)
-        metrics_recorder["lcoe_south"].append(lcoe3)
-        metrics_recorder["lcoe_all"].append(lcoe)
+        record_main_metrics_multisub(metrics_recorder, opt_nr, aep, x, y, mp_cost, cable_cost, lcoe,
+            tur_nr, G1, G2, G3, capex, LP, CRF, OpexAnnual)
     elif Mode == 'competitive' or Mode == 'evaluate_sequ' or Mode == 'evaluate_multiter':
-        # current zone
-        metrics_recorder["cur_zone"].append([curzone])
-        metrics_recorder["neighbours"].append(nb)
-        metrics_recorder["x_" + curzone].append(x.flatten().tolist())
-        metrics_recorder["y_" + curzone].append(y.flatten().tolist())
-        metrics_recorder["aep_" + curzone].append(aep.isel(wt=slice(0,tur_nr[wf[curzone]])).sum().item())
-        metrics_recorder["cable_cost_" + curzone].append(cable_cost)
-        metrics_recorder["mp_cost_" + curzone].append(sum(mp_cost))
-        metrics_recorder["lcoe_" + curzone].append(lcoe)
-        npv_all = [npv]
-        
-        # 0 for non-neighbours
-        for n, zone in enumerate(nnb):
-            metrics_recorder["x_" + zone].append([])
-            metrics_recorder["y_" + zone].append([])
-            metrics_recorder["aep_" + zone].append(0)
-            metrics_recorder["cable_cost_" + zone].append(0)
-            metrics_recorder["mp_cost_" + zone].append(0)
-            metrics_recorder["lcoe_" + zone].append(0)
-            
-        # neighbours
-        for n, zone in enumerate(nb):
-            metrics_recorder["x_" + zone].append(metrics_recorder["x_" + zone][-1])
-            metrics_recorder["y_" + zone].append(metrics_recorder["y_" + zone][-1])
-            if n == 0:
-                aep_n = aep.isel(wt=slice(tur_nr[wf[curzone]],tur_nr[wf[curzone]] + tur_nr[wf[zone]])).sum().item()
-            elif n == 1:
-                aep_n = aep.isel(wt=slice(tur_nr[wf[curzone]] + tur_nr[wf[nb[n-1]]],None)).sum().item()
-            metrics_recorder["aep_" + zone].append(aep_n)
-            metrics_recorder["cable_cost_" + zone].append(cable_cost_n[n])
-            metrics_recorder["mp_cost_" + zone].append(mp_cost_n[n])
-            npv_n = (capex*tur_nr[wf[zone]] + mp_cost_n[n] + cable_cost_n[n] + LP*tur_nr[wf[zone]]) * CRF + OpexAnnual*tur_nr[wf[zone]]
-            metrics_recorder["lcoe_" + zone].append(npv_n / aep_n)
-            npv_all.append(npv_n)
-            
-        # total
-        metrics_recorder["aep_all"].append(np.sum(aep).item())
-        metrics_recorder["cable_cost_all"].append(sum(cable_cost_n) + cable_cost)
-        metrics_recorder["mp_cost_all"].append(sum(mp_cost_n) + sum(mp_cost))
-        metrics_recorder["lcoe_all"].append(sum(npv_all)/np.sum(aep).item())
+        record_main_metrics_singlesub(metrics_recorder, opt_nr, aep, x, y, mp_cost, cable_cost, lcoe,
+            curzone, nb, nnb, wf, tur_nr, cable_cost_n, mp_cost_n,
+            npv, capex, LP, CRF, OpexAnnual)
     # for global variable
     aep = aep.isel(wt=slice(0,len(x))).sum().item()
     if obj == 'lcoe':
@@ -488,70 +387,27 @@ points = {name: get_random_points(name, tur_nr[wf[name]]) for name in wf}
 min_spacing_m = 2 * windTurbines.diameter()  #minimum inter-turbine spacing in meters
 
 #%% Recorder
-metrics_recorder = {
-    "sequence": Sequence,
-    "iteration": [],
-    "opt_nr": [],
-    "cur_zone": [],
-    "neighbours": [],
-    "aep": [],
-    "mp_cost": [],
-    "cable_cost": [],
-    "lcoe": [],
-    "cable_u": [],
-    "cable_v": [],
-    "cable_u_north": [],
-    "cable_u_mid": [],
-    "cable_u_south": [],
-    "cable_v_north": [],
-    "cable_v_mid": [],
-    "cable_v_south": [],
-    "cable_type": [],
-    "cable_type_north": [],
-    "cable_type_mid": [],
-    "cable_type_south": [],
-    "aep_north": [],
-    "aep_mid": [],
-    "aep_south": [],
-    "aep_all": [],
-    "mp_cost_north": [],
-    "mp_cost_mid": [],
-    "mp_cost_south": [],
-    "mp_cost_all": [],
-    "cable_cost_north": [],
-    "cable_cost_mid": [],
-    "cable_cost_south": [],
-    "cable_cost_all": [],
-    "lcoe_north": [],
-    "lcoe_mid": [],
-    "lcoe_south": [],
-    "lcoe_all": [],
-    "x_north": [],
-    "y_north": [],
-    "x_mid": [],
-    "y_mid": [],
-    "x_south": [],
-    "y_south": [],
-    "x_final": [],
-    "y_final": [],
-    "lcoe_final": []
-}
+metrics_recorder = create_recorder(Sequence)
 
 #%% Convergence plotting script
 def plot_convergence(mr=None,item=None,plotstr=None,obj=1,overall=0,optfat=0):
     plt.figure(figsize=(5, 3))
-    plt.plot(np.arange(mr['iteration'][-1]),[x if x!=0 else np.NaN for x in mr[item+'_north']], label='North', linewidth = 1)
-    plt.plot(np.arange(mr['iteration'][-1]),[x if x!=0 else np.NaN for x in mr[item+'_mid']], label='Mid', linewidth = 1)
-    plt.plot(np.arange(mr['iteration'][-1]),[x if x!=0 else np.NaN for x in mr[item+'_south']], label='South', linewidth = 1)
+    plt.plot(np.array(mr['iteration']),[x if x!=0 else np.NaN for x in mr[item+'_north']], label='North', linewidth = 1)
+    plt.plot(np.array(mr['iteration']),[x if x!=0 else np.NaN for x in mr[item+'_mid']], label='Mid', linewidth = 1)
+    plt.plot(np.array(mr['iteration']),[x if x!=0 else np.NaN for x in mr[item+'_south']], label='South', linewidth = 1)
     if obj:
-        plt.plot(np.arange(mr['iteration'][-1]),[x if x!=0 else np.NaN for x in mr[item]], label='Overall', linewidth = 1)
+        plt.plot(np.array(mr['iteration']),[x if x!=0 else np.NaN for x in mr[item]], label='Overall', linewidth = 1)
     if overall:
-        plt.plot(np.arange(mr['iteration'][-1]),[x if x!=0 else np.NaN for x in mr[item+'_all']], label='Overall', linewidth = 1)
+        plt.plot(np.array(mr['iteration']),[x if x!=0 else np.NaN for x in mr[item+'_all']], label='Overall', linewidth = 1)
     if optfat:
-        for i in range(len(list(set(Sequence)))-1,len(mr['lcoe_all'])-1):
-            curzone
-            plt.plot(np.array(mr['iteration'][i:i+2])-1,
-                np.array(mr[item+'_'+mr['cur_zone'][i+1][0]][i:i+2]), linestyle="--", linewidth = 0.8, color="black")
+        for i in range(0,len(mr['lcoe_all'])-1):
+            if i == 0:
+                leg = 'Current objective'
+            else:
+                leg = None
+            if mr['opt_nr'][i] == mr['opt_nr'][i+1]:
+                plt.plot(np.array(mr['iteration'][i:i+2])-1,
+                    np.array(mr[item+'_'+mr['cur_zone'][i][0]][i:i+2]), linestyle="--", linewidth = 0.8, color="black", label=leg)
     FS = 9
     plt.legend(fontsize=FS)
     plt.grid()
@@ -757,7 +613,6 @@ elif Mode == 'evaluate_sequ':
             yn = np.concatenate([yn, data['y_' + zone][-1]])
             cable_cost_n[j] = data['cable_cost_' + zone][-1]
             mp_cost_n [j]= data['mp_cost_' + zone][-1]
-            
             metrics_recorder['x_' + zone] = [data['x_' + zone][-1]]
             metrics_recorder['y_' + zone] = [data['y_' + zone][-1]]
             metrics_recorder['cable_u_' + zone] = [data['cable_u_' + zone][-1]]
@@ -780,63 +635,88 @@ elif Mode == 'evaluate_sequ':
     inputs['x'] = np.array(x0)
     inputs['y'] = np.array(y0)
     plot.compute(inputs,[])
-#%%
+#%% Evaluate existing design if it was run with sampling (recalculate for full wind rose)
 elif Mode == 'evaluate_multiter':
+    evaluate_recorder = 1
+    File = "metric_recorder_sequential_nmsnmsnms_same_lr"
     # specify file you want to load
-    with open("C:\Software\IEA-Wind-2200-22-ROWP\examples\metric_recorder_sequential_nmsnmsnms_rand.pkl", "rb") as file:
+    with open("C:\\Software\\IEA-Wind-2200-22-ROWP\\examples\\" + File + ".pkl", "rb") as file:
         data = pickle.load(file)
     data = data['metrics_recorder']
     
-    # get the index in metrics recorder of each last iteration step
-    vec = pd.Series(data['opt_nr'])
-    eva_indices = vec.groupby(vec).apply(lambda x: x.index[-1]).values
-    
-    
-    for idx in eva_indices:
-        curzone = data['cur_zone'][idx][0]
-        x0 = np.array(data['x_' + curzone][idx])
-        y0 = np.array(data['y_' + curzone][idx])
-        #
-        # defaults
-        nb = data['neighbours'][idx]
-        nnb = list(set(Sequence))
-        nnb.remove(curzone)
-        nnb = [x for x in nnb if x not in nb]
-        # nb = ['north']
-        # nnb = ['south']
-        SepCabling = False
-        sample = False
-        if nb:
-            nf = True
-            xn = np.array([])
-            yn = np.array([])
-            for j, zone in enumerate(nb):
-                xn = np.concatenate([xn, data['x_' + zone][idx]])
-                yn = np.concatenate([yn, data['y_' + zone][idx]])
-                cable_cost_n[j] = data['cable_cost_' + zone][idx]
-                mp_cost_n [j]= data['mp_cost_' + zone][idx]
-                
-                # metrics_recorder['x_' + zone] = [data['x_' + zone][-1]]
-                # metrics_recorder['y_' + zone] = [data['y_' + zone][-1]]
-                # metrics_recorder['cable_u_' + zone] = [data['cable_u_' + zone][-1]]
-                # metrics_recorder['cable_v_' + zone] = [data['cable_v_' + zone][-1]]
-                # metrics_recorder['cable_type_' + zone] = [data['cable_type_' + zone][-1]]
-                
-        boundplot = list(boundaries.values())
-        plot_folder = "EvalFigures"
-        opt_nr = data['opt_nr'][idx]  
-        Sx = [Subs_x[wf[curzone]]]
-        Sy = [Subs_y[wf[curzone]]]
-        #
-        # run
-        lcoe = lcoe_func(x0,y0)
-        # plot
-        plt.figure()
-        plot = XYPlotCompBathym(save_plot_per_iteration=True, plot_initial=False, memory=0, X=X_utm, Y=Y_utm, Z=Z, Sx=Sub_x, Sy=Sub_y, cables=cables, metrics_recorder=metrics_recorder, Xn=xn, Yn=yn, b=boundplot, opt_nr=opt_nr, folder=plot_folder, sampling=sample, obj=obj, optimize=False)
-        inputs = {}
-        inputs['x'] = np.array(x0)
-        inputs['y'] = np.array(y0)
-        plot.compute(inputs,[])
+    if evaluate_recorder:
+        # get the index in metrics recorder of each last iteration step
+        vec = pd.Series(data['opt_nr'])
+        eva_indices = vec.groupby(vec).apply(lambda x: x.index[-1]).values
+        eva_indices = np.column_stack((eva_indices, eva_indices + 1)).ravel()
+        eva_indices = np.insert(eva_indices,0,0)
+        eva_indices = np.delete(eva_indices,-1)
         
+        # Add indices in between
+        step = 50   # iterations
+        new_indices = []
+        for i in range(len(eva_indices) - 1):
+            start = eva_indices[i]
+            end = eva_indices[i + 1]
+            step_indices = list(range(start, end, step))
+            new_indices.extend(step_indices)
+        new_indices.append(eva_indices[-1])  # Add the final value
+        eva_indices = new_indices
+        
+        # go through each required index and add results to metrics_recorder.
+        for i, idx in enumerate(eva_indices):
+            print('evaluate case ' + str(i+1) + '/' + str(len(eva_indices)))
+            curzone = data['cur_zone'][idx][0]
+            x0 = np.array(data['x_' + curzone][idx])
+            y0 = np.array(data['y_' + curzone][idx])
+            #
+            # defaults
+            nb = data['neighbours'][idx]
+            nnb = list(set(Sequence))
+            nnb.remove(curzone)
+            nnb = [x for x in nnb if x not in nb]
+            # nb = ['north']
+            # nnb = ['south']
+            SepCabling = False
+            sample = False
+            if nb:
+                nf = True
+                xn = np.array([])
+                yn = np.array([])
+                for j, zone in enumerate(nb):
+                    xn = np.concatenate([xn, data['x_' + zone][idx]])
+                    yn = np.concatenate([yn, data['y_' + zone][idx]])
+                    cable_cost_n[j] = data['cable_cost_' + zone][idx]
+                    mp_cost_n[j]= data['mp_cost_' + zone][idx]
+                    
+                    # metrics_recorder['x_' + zone] = [data['x_' + zone][-1]]
+                    # metrics_recorder['y_' + zone] = [data['y_' + zone][-1]]
+                    # metrics_recorder['cable_u_' + zone] = [data['cable_u_' + zone][-1]]
+                    # metrics_recorder['cable_v_' + zone] = [data['cable_v_' + zone][-1]]
+                    # metrics_recorder['cable_type_' + zone] = [data['cable_type_' + zone][-1]]
+                    
+            boundplot = list(boundaries.values())
+            plot_folder = "EvalFigures"
+            opt_nr = data['opt_nr'][idx]  
+            Sx = [Subs_x[wf[curzone]]]
+            Sy = [Subs_y[wf[curzone]]]
+            #
+            # run
+            lcoe = lcoe_func(x0,y0)
+            # plot
+            if plot_iter:
+                plt.figure()
+                plot = XYPlotCompBathym(save_plot_per_iteration=True, plot_initial=False, memory=0, X=X_utm, Y=Y_utm, Z=Z, Sx=Sub_x, Sy=Sub_y, cables=cables, metrics_recorder=metrics_recorder, Xn=xn, Yn=yn, b=boundplot, opt_nr=opt_nr, folder=plot_folder, sampling=sample, obj=obj, optimize=False)
+                inputs = {}
+                inputs['x'] = np.array(x0)
+                inputs['y'] = np.array(y0)
+                plot.compute(inputs,[])
+        metrics_recorder['iteration'] = eva_indices
+        
+        with open(File + "_processed.pkl", "wb") as file:
+            pickle.dump({"metrics_recorder": metrics_recorder}, file)
+    
     plot_convergence(mr=metrics_recorder,item='lcoe',plotstr='LCOE (€/MWh)',obj=0,overall=0,optfat=1)
-    plot_convergence(mr=metrics_recorder,item='aep',plotstr='AEP (GWh)',obj=0,overall=0)
+    plot_convergence(mr=metrics_recorder,item='aep',plotstr='AEP (GWh)',obj=0,overall=0,optfat=1)
+    plot_convergence(mr=metrics_recorder,item='cable_cost',plotstr='Cable Cost (€)',obj=0,overall=0,optfat=1)
+    plot_convergence(mr=metrics_recorder,item='mp_cost',plotstr='Monopile Cost (€)',obj=0,overall=0,optfat=1)
