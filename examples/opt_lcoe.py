@@ -38,6 +38,7 @@ plot_conv = True
 tur_nr = [33,33,34]     # Desired turbine number in optimized farm, from north to south!
 obj = 'lcoe'            # 'lcoe' or 'aep'
 plot_iter = True
+plot_each = 10          # define in which interval a plot should be made
 
 # monopile optimization
 MP_ref = 1          # reference turbine type for monopile mass scaling. 0 = 10MW, 1 = 15MW, 2 = 3.4MW
@@ -671,7 +672,7 @@ elif Mode == 'competitive':
         
         # Plot or not
         if plot_iter:
-            plot_comp = XYPlotCompBathym(save_plot_per_iteration=True, plot_initial=False, memory=0, X=X_utm, Y=Y_utm, Z=Z, Sx=Sub_x, Sy=Sub_y, cables=cables, metrics_recorder=metrics_recorder, Xn=xn, Yn=yn, b=boundplot, opt_nr=opt_nr, folder=plot_folder, sampling=sample, obj=obj)
+            plot_comp = XYPlotCompBathym(save_plot_per_iteration=True, plot_initial=False, memory=0, X=X_utm, Y=Y_utm, Z=Z, Sx=Sub_x, Sy=Sub_y, cables=cables, metrics_recorder=metrics_recorder, Xn=xn, Yn=yn, b=boundplot, opt_nr=opt_nr, folder=plot_folder, sampling=sample, obj=obj, ploteach=plot_each)
         else:
             plot_comp = None
         
