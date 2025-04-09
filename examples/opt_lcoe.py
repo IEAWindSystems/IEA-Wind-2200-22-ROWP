@@ -542,16 +542,16 @@ elif Mode == 'competitive':
         if i < len(list(set(Sequence))):
             learning_rate = windTurbines.diameter()*0.2
         elif i < 2*len(list(set(Sequence))):
-            learning_rate = windTurbines.diameter()*0.01
+            learning_rate = windTurbines.diameter()*0.1
         else:
-            learning_rate = windTurbines.diameter()*0.005
+            learning_rate = windTurbines.diameter()*0.05
         
         # Optimization Setup
         tf = TopFarmProblem(
                 design_vars = {'x':x0, 'y':y0},         
                 cost_comp = CostModelComponent(input_keys=['x','y'], n_wt=tur_nr[wf[Sequence[i]]], cost_function=lcoe_func, objective=True, cost_gradient_function=lcoe_jac, maximize=maximize),
                 constraints = DistanceConstraintAggregation([SpacingConstraint(min_spacing_m), constraint_comp],tur_nr[wf[Sequence[i]]], min_spacing_m, windTurbines), 
-                driver = EasySGDDriver(maxiter=3000, learning_rate=learning_rate, speedupSGD=True, sgd_thresh=0.02),
+                driver = EasySGDDriver(maxiter=3000, max_time=1008000, learning_rate=learning_rate, speedupSGD=True, sgd_thresh=0.02),
                 plot_comp = plot_comp)
         
         # Run
