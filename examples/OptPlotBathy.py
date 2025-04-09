@@ -205,7 +205,7 @@ class XYPlotCompBathym(ExplicitComponent):
                 # b) helper for plot
                 lw = [0.5,1,1.7]    # line width of different cable types
                 # c) go through all turbines and plot connection
-                for i in range(len(AllX)-len(self.Sx)):
+                for i in range(len(con)):
                     if cabplot[con[i][2]] == 0 and con[i][2] == plot2:
                         self.ax.plot([AllX[con[i][0]],AllX[con[i][1]]],[AllY[con[i][0]],AllY[con[i][1]]],color='firebrick',linewidth=lw[con[i][2]],label=CabName[con[i][2]])
                         cabplot[con[i][2]] = 1
