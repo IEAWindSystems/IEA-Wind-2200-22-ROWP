@@ -20,7 +20,8 @@ from topfarm.constraint_components.boundary import XYBoundaryConstraint, Inclusi
 from py_wake.utils.gradients import fd, autograd
 from topfarm.constraint_components.constraint_aggregation import DistanceConstraintAggregation
 from py_wake.turbulence_models import CrespoHernandez
-from windIO.utils.yml_utils import load_yaml
+import windIO
+from pathlib import Path
 from scipy.interpolate import RegularGridInterpolator
 from ssms.CalculateMass import CalculateMass
 from ed_win.wind_farm_network import WindFarmNetwork
@@ -63,7 +64,7 @@ cables = np.array([[185,3,368.9], [400,5,428.9], [1000,7,737.1]])       # 110kV
 
 #%% Load data and setup pywake
 # system_dat = sys.argv[1]
-system_dat = load_yaml(os.sep.join(['..', 'inputs', 'wind_energy_system.yaml']))
+system_dat = windIO.load_yaml(Path(os.sep.join(['..', 'inputs', 'wind_energy_system.yaml'])))
 farm_dat = system_dat['wind_farm']
 resource_dat = system_dat['site']['energy_resource']
 
