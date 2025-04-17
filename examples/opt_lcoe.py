@@ -712,11 +712,13 @@ elif Mode == 'evaluate_multiter':
                 inputs['x'] = np.array(x0)
                 inputs['y'] = np.array(y0)
                 plot.compute(inputs,[])
+                plt.close()
         metrics_recorder['iteration'] = eva_indices
         
         with open(File + "_processed.pkl", "wb") as file:
             pickle.dump({"metrics_recorder": metrics_recorder}, file)
-    
+    else:
+        metrics_recorder = data
     plot_convergence(mr=metrics_recorder,item='lcoe',plotstr='LCOE (€/MWh)',obj=0,overall=0,optfat=1)
     plot_convergence(mr=metrics_recorder,item='aep',plotstr='AEP (GWh)',obj=0,overall=0,optfat=1)
     plot_convergence(mr=metrics_recorder,item='cable_cost',plotstr='Cable Cost (€)',obj=0,overall=0,optfat=1)

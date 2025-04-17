@@ -23,7 +23,7 @@ class QLSModel(object):
 
 def CalculateMass(RP, D, HTrans, HHub_Ratio, WaterDepth, WaveHeight, WavePeriod, WindSpeed, IP_item):
     # load the surrogates
-    model_path = 'ssms/models/QLS'
+    model_path = os.path.dirname(__file__).replace("\\", "/") + '/models/QLS'
     model_indicator = '_QLS_surrogate_model.pickle'
     
     files = []
