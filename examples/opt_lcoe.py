@@ -14,7 +14,6 @@ from py_wake import NOJ, BastankhahGaussian
 from topfarm.cost_models.cost_model_wrappers import CostModelComponent
 from topfarm.easy_drivers import EasySGDDriver
 from OptPlotBathy import XYPlotCompBathym
-from topfarm.constraint_components.spacing import SpacingConstraint
 from topfarm import TopFarmProblem
 from topfarm.constraint_components.boundary import XYBoundaryConstraint, InclusionZone
 from py_wake.utils.gradients import fd, autograd
@@ -26,7 +25,7 @@ from scipy.interpolate import RegularGridInterpolator
 from ssms.CalculateMass import CalculateMass
 from ed_win.wind_farm_network import WindFarmNetwork
 from shapely.geometry import Point, Polygon
-from topfarm.constraint_components.boundary import MultiWFPolygonBoundaryConstraint
+from topfarm.constraint_components.boundary import MultiWFBoundaryConstraint, BoundaryType
 from RecordFunc import create_recorder, record_cable_metrics_singlesub, record_cable_metrics_multisub, record_main_metrics_multisub, record_main_metrics_singlesub
 np.random.seed(2)
 #
@@ -34,6 +33,7 @@ np.random.seed(2)
 # farm layout
 Mode = 'competitive'    # 'cooperative' or 'competitive' or 'evaluate_sequ' or 'evaluate_multiter'
 Sequence = ['north','mid','south','north','mid','south','north','mid','south']
+Continue = False         # set to True if you give foregoing metrics_recorder to continue optimization
 Model = 'gauss'
 plot_conv = True
 tur_nr = [33,33,34]     # Desired turbine number in optimized farm, from north to south!
@@ -420,14 +420,16 @@ def plot_convergence(mr=None,item=None,plotstr=None,obj=1,overall=0,optfat=0):
 
 #%% Cooperative design
 if Mode == 'cooperative':
+    plot_folder = "Figures_cooperative"
     # Initital Layout
     x0 = np.concatenate([np.array(points[name])[:, 0] for name in wf])
     y0 = np.concatenate([np.array(points[name])[:, 1] for name in wf])
     
     # Constraint
-    joint_boundaries = MultiWFPolygonBoundaryConstraint(
-        {idx: boundaries[name] for idx, name in enumerate(wf)},  # Boundary mapping
-        turbine_groups={idx: np.arange(sum(tur_nr[:idx]), sum(tur_nr[:idx + 1])) for idx in range(len(wf))}  # Turbine groups
+    joint_boundaries = MultiWFBoundaryConstraint(
+        geometry = [boundaries[name] for name in wf],  # Boundary mapping
+        wt_groups=[np.arange(sum(tur_nr[:idx]), sum(tur_nr[:idx + 1])) for idx in range(len(wf))],  # Turbine groups
+        boundtype = BoundaryType.POLYGON
     )
 
     # Options
@@ -436,13 +438,25 @@ if Mode == 'cooperative':
     Sx = Subs_x
     Sy = Subs_y
     
+    # Plot or not
+    if plot_iter:
+        plot_comp = XYPlotCompBathym(save_plot_per_iteration=True, plot_initial=False, memory=0, X=X_utm, Y=Y_utm, Z=Z, Sx=Sub_x, Sy=Sub_y, cables=cables, metrics_recorder=metrics_recorder, folder=plot_folder, sampling=sample, obj=obj, ploteach=plot_each)
+    else:
+        plot_comp = None
+    
+    # Max or min
+    if obj == 'lcoe':
+        maximize = False
+    elif obj == 'aep':
+        maximize = True
+    
     # Optimization setup
     tf = TopFarmProblem(
             design_vars = {'x':x0, 'y':y0},         
             cost_comp = CostModelComponent(input_keys=['x','y'], n_wt=sum(tur_nr), cost_function=lcoe_func, objective=True, cost_gradient_function=lcoe_jac, maximize=False),
-            constraints = DistanceConstraintAggregation([SpacingConstraint(min_spacing_m), joint_boundaries], sum(tur_nr), min_spacing_m, windTurbines), 
+            constraints = DistanceConstraintAggregation(joint_boundaries, sum(tur_nr), min_spacing_m, windTurbines), 
             driver = EasySGDDriver(maxiter=3000, learning_rate=windTurbines.diameter()*0.2, speedupSGD=True, sgd_thresh=0.02),
-            plot_comp = XYPlotCompBathym(save_plot_per_iteration=True, plot_initial=False, memory=0, X=X_utm, Y=Y_utm, Z=Z, Sx=Sub_x, Sy=Sub_y, cables=cables, metrics_recorder=metrics_recorder, Xn=xn, Yn=yn, b=[]),
+            plot_comp = plot_comp
             )
     
     # Run
@@ -487,6 +501,19 @@ if Mode == 'cooperative':
 
 #%% Competitive design
 elif Mode == 'competitive':
+    if Continue:
+        print('---- !! Careful, starting from foregoing design !! ----')
+        File = "metric_recorder_sequential_samelr_linint_nmsnmsnms"
+        with open("C:\\Software\\IEA-Wind-2200-22-ROWP\\examples\\" + File + ".pkl", "rb") as file:
+            data = pickle.load(file)
+        metrics_recorder = data['metrics_recorder']
+        # Truncate each list
+        for key in metrics_recorder:
+            metrics_recorder[key] = metrics_recorder[key][:12126 + 1]
+        Sequence = metrics_recorder['sequence']
+        loop_range = range(6,len(Sequence))
+    else:
+        loop_range = range(len(Sequence))
     # general options
     sample = True
     SepCabling = False
@@ -494,7 +521,8 @@ elif Mode == 'competitive':
     plot_folder = "Figures_" + ''.join([entry[0] for entry in Sequence])
         
     # go through each zone as specified in Sequence
-    for i in range(len(Sequence)):
+    
+    for i in loop_range:
         opt_nr = i+1
         curzone = Sequence[i]
         # Initial Layout
@@ -551,8 +579,8 @@ elif Mode == 'competitive':
         tf = TopFarmProblem(
                 design_vars = {'x':x0, 'y':y0},         
                 cost_comp = CostModelComponent(input_keys=['x','y'], n_wt=tur_nr[wf[Sequence[i]]], cost_function=lcoe_func, objective=True, cost_gradient_function=lcoe_jac, maximize=maximize),
-                constraints = DistanceConstraintAggregation([SpacingConstraint(min_spacing_m), constraint_comp],tur_nr[wf[Sequence[i]]], min_spacing_m, windTurbines), 
-                driver = EasySGDDriver(maxiter=3000, max_time=1008000, learning_rate=learning_rate, speedupSGD=True, sgd_thresh=0.02),
+                constraints = DistanceConstraintAggregation(constraint_comp, tur_nr[wf[Sequence[i]]], min_spacing_m, windTurbines), 
+                driver = EasySGDDriver(maxiter=3000, learning_rate=learning_rate, speedupSGD=True, sgd_thresh=0.02),
                 plot_comp = plot_comp)
         
         # Run
