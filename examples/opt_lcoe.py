@@ -735,7 +735,7 @@ elif Mode == 'evaluate_multiter':
             # plot
             if plot_iter:
                 plt.figure()
-                plot = XYPlotCompBathym(save_plot_per_iteration=True, plot_initial=False, memory=0, X=X_utm, Y=Y_utm, Z=Z, Sx=Sub_x, Sy=Sub_y, cables=cables, metrics_recorder=metrics_recorder, Xn=xn, Yn=yn, b=boundplot, opt_nr=opt_nr, folder=plot_folder, sampling=sample, obj=obj, optimize=False)
+                plot = XYPlotCompBathym(save_plot_per_iteration=True, plot_initial=False, memory=0, X=X_utm, Y=Y_utm, Z=Z, Sx=Sub_x, Sy=Sub_y, cables=cables, metrics_recorder=metrics_recorder, Xn=xn, Yn=yn, b=boundplot, opt_nr=1, folder=plot_folder, sampling=sample, obj=obj, optimize=False, iter_nr = i)
                 inputs = {}
                 inputs['x'] = np.array(x0)
                 inputs['y'] = np.array(y0)
@@ -747,6 +747,23 @@ elif Mode == 'evaluate_multiter':
             pickle.dump({"metrics_recorder": metrics_recorder}, file)
     else:
         metrics_recorder = data
+        if plot_iter:
+            plot_folder = "FinalResult"
+            boundplot = list(boundaries.values())
+            nb = metrics_recorder['neighbours'][-1]
+            xn = []
+            yn = []
+            for zone in nb:
+                xn = np.concatenate([xn, data['x_' + zone][-1]])
+                yn = np.concatenate([yn, data['y_' + zone][-1]])
+            plt.figure()
+            plot = XYPlotCompBathym(save_plot_per_iteration=True, plot_initial=True, memory=0, X=X_utm, Y=Y_utm, Z=Z, Sx=Sub_x, Sy=Sub_y, cables=cables, metrics_recorder=metrics_recorder, Xn=xn, Yn=yn, b=boundplot, opt_nr=opt_nr, folder=plot_folder, sampling=sample, obj=obj, optimize=False)
+            inputs = {}
+            curzone = metrics_recorder['cur_zone'][-1]
+            inputs['x'] = np.array(np.array(data['x_' + curzone[-1]][-1]))
+            inputs['y'] = np.array(np.array(data['y_' + curzone[-1]][-1]))
+            plot.compute(inputs,[])
+            
     plot_convergence(mr=metrics_recorder,item='lcoe',plotstr='LCOE (€/MWh)',obj=0,overall=0,optfat=1)
     plot_convergence(mr=metrics_recorder,item='aep',plotstr='AEP (GWh)',obj=0,overall=0,optfat=1)
     plot_convergence(mr=metrics_recorder,item='cable_cost',plotstr='Cable Cost (€)',obj=0,overall=0,optfat=1)
