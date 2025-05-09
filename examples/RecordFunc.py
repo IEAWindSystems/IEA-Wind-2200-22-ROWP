@@ -58,10 +58,19 @@ def create_recorder(Sequence):
     }
     return metrics_recorder
 
-def record_cable_metrics_singlesub(metrics_recorder, cab_data, curzone, nnb, nb):
-    metrics_recorder["cable_u_" + curzone].append(cab_data['u'].tolist())
-    metrics_recorder["cable_v_" + curzone].append(cab_data['v'].tolist())
-    metrics_recorder["cable_type_" + curzone].append(cab_data['cable'].tolist())
+def record_cable_metrics_singlesub(metrics_recorder, wfn, curzone, nnb, nb):
+    cab_data = wfn.get_network()
+    # get connection matrix
+    u_fnt = []
+    v_fnt = []
+    for u, v in wfn.G.edges():
+        if 'fnT' in wfn.G.graph:
+            u_fnt.append(int(wfn.G.graph['fnT'][u]))
+            v_fnt.append(int(wfn.G.graph['fnT'][v]))
+    # record
+    metrics_recorder["cable_u_" + curzone].append(u_fnt)
+    metrics_recorder["cable_v_" + curzone].append(v_fnt)
+    metrics_recorder["cable_type_" + curzone].append([t[2]['cable'] for t in cab_data])
 
     for zone in nnb:
         metrics_recorder["cable_u_" + zone].append([])

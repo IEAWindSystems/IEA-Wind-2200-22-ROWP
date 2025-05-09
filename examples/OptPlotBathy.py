@@ -30,7 +30,7 @@ class XYPlotCompBathym(ExplicitComponent):
     # colors = ['b', 'r', 'm', 'c', 'g', 'y', 'orange', 'indigo', 'grey'] * 100
     colors = [c['color'] for c in iter(matplotlib.rcParams['axes.prop_cycle'])] * 100
 
-    def __init__(self, memory=10, delay=0.001, plot_initial=True, plot_improvements_only=False, ax=None, legendloc=1, save_plot_per_iteration=False, X=None, Y=None, Z=None, Sx=None, Sy=None, cables=None, metrics_recorder=None, Xn=[], Yn=[], b=[], opt_nr=None, folder='Figures', sampling=False, obj=None, optimize=True, ploteach=1):
+    def __init__(self, memory=10, delay=0.001, plot_initial=True, plot_improvements_only=False, ax=None, legendloc=1, save_plot_per_iteration=False, X=None, Y=None, Z=None, Sx=None, Sy=None, cables=None, metrics_recorder=None, Xn=[], Yn=[], b=[], opt_nr=None, folder='Figures', sampling=False, obj=None, optimize=True, ploteach=1, iter_nr=1):
         """Initialize component for plotting turbine locations
 
         Parameters
@@ -76,6 +76,7 @@ class XYPlotCompBathym(ExplicitComponent):
         self.obj = obj
         self.optimize = optimize
         self.ploteach = ploteach
+        self.iter_nr = iter_nr
     @property
     def ax(self):
         return self._ax or plt.gca()
@@ -198,7 +199,7 @@ class XYPlotCompBathym(ExplicitComponent):
             if self.metrics_recorder['cable_u_' + zone]:
                 u = self.metrics_recorder['cable_u_' + zone][-1]
                 v = self.metrics_recorder['cable_v_' + zone][-1]
-                con = list(zip([x - 1 for x in v], [x - 1 for x in u], self.metrics_recorder['cable_type_' + zone][-1]))
+                con = list(zip([x + 1 for x in v], [x + 1 for x in u], self.metrics_recorder['cable_type_' + zone][-1]))
                 # Plot cabling
                 # a) Combine turbine + subsation coordinates
                 AllX = [self.Sx[zone]] + self.metrics_recorder['x_' + zone][-1]
@@ -308,8 +309,8 @@ class XYPlotCompBathym(ExplicitComponent):
                 self.counter += 1
                 outputs['plot_counter'] = self.counter
             else:
-                self.counter = self.opt_nr
-
+                self.counter = self.iter_nr
+                
             if self.save_plot_per_iteration:
                 if not os.path.exists(self.folder):
                     os.makedirs(self.folder)

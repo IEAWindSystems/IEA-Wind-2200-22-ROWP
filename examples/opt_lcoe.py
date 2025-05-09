@@ -22,8 +22,8 @@ from py_wake.turbulence_models import CrespoHernandez
 import windIO
 from pathlib import Path
 from scipy.interpolate import RegularGridInterpolator
-from ssms.CalculateMass import CalculateMass
-from ed_win.wind_farm_network import WindFarmNetwork
+# from ssms.CalculateMass import CalculateMass
+from optiwindnet.api import WindFarmNetwork
 from shapely.geometry import Point, Polygon
 from topfarm.constraint_components.boundary import MultiWFBoundaryConstraint, BoundaryType
 from RecordFunc import create_recorder, record_cable_metrics_singlesub, record_cable_metrics_multisub, record_main_metrics_multisub, record_main_metrics_singlesub
@@ -38,7 +38,7 @@ Model = 'gauss'
 plot_conv = True
 tur_nr = [33,33,34]     # Desired turbine number in optimized farm, from north to south!
 obj = 'lcoe'            # 'lcoe' or 'aep'
-plot_iter = False
+plot_iter = True
 plot_each = 10          # define in which interval a plot should be made
 
 # monopile optimization
@@ -59,8 +59,12 @@ OpexAnnual = 2.97e6 * 0.924     # €2024 per turbine, annual OPEX,from NREL COE
 LP = 0               # $2010 per turbine, liquidation proceeds, from DETECT for HKN scaled (22MW turbines)
 
 # cable data [cross section, capacity, price]
-cables = np.array([[185,3,368.9], [400,5,428.9], [1000,7,737.1]])       # 110kV
-# cables = np.array([[500, 3, 393], [800, 5, 522.4], [1000, 7, 615.5]]) # 66kV
+# Define cable properties using a list of dictionaries
+cable_specs = [
+    {"diameter_mm2": 185, "capacity_NrT": 3, "cost_€_m": 368.9},
+    {"diameter_mm2": 400, "capacity_NrT": 5, "cost_€_m": 428.9},
+    {"diameter_mm2": 1000, "capacity_NrT": 7, "cost_€_m": 737.1}
+]
 
 #%% Load data and setup pywake
 # system_dat = sys.argv[1]
@@ -170,24 +174,25 @@ def depth_interp(x, y):
 
 # Calculate monopile mass for different water depth
 depths = np.linspace(np.min(-Z),np.max(-Z),20)
-ph = 15     # Platform height [m]
-swh = 2.52  # Significant Wave Height [m]
-swp = 5.45  # Significiant Wave Period [s]
-# P_interpolator = interp1d(np.cumsum(sum(P)), ws, kind='linear')  # interpolator to get mean wind sped (@50% probability)
-# V_ave = P_interpolator(0.5).tolist()
-import scipy.special as sp
-def mean_wind_speed(A, k):
-    return A * sp.gamma(1 + 1/k)
-V_ave = []
-for i in range(len(wd)):
-    V_ave.append(mean_wind_speed(A['data'][i],k['data'][i]))
-V_ave = np.sum(np.array(V_ave) * np.array(freq['data']))
-masses = []
-for z in depths:
-   cur_mass = CalculateMass(RP=rp/1e6, D=rd, HTrans=ph, HHub_Ratio=hh/rd, WaterDepth=z, WaveHeight=swh, WavePeriod=swp, WindSpeed=V_ave, IP_item=MP_ref)
-   masses.append(cur_mass[0][0])
-# add transition piece (100t, from 22MW report)
-masses = [x + 100000 for x in masses]
+# ph = 15     # Platform height [m]
+# swh = 2.52  # Significant Wave Height [m]
+# swp = 5.45  # Significiant Wave Period [s]
+# # P_interpolator = interp1d(np.cumsum(sum(P)), ws, kind='linear')  # interpolator to get mean wind sped (@50% probability)
+# # V_ave = P_interpolator(0.5).tolist()
+# import scipy.special as sp
+# def mean_wind_speed(A, k):
+#     return A * sp.gamma(1 + 1/k)
+# V_ave = []
+# for i in range(len(wd)):
+#     V_ave.append(mean_wind_speed(A['data'][i],k['data'][i]))
+# V_ave = np.sum(np.array(V_ave) * np.array(freq['data']))
+# masses = []
+# for z in depths:
+#    cur_mass = CalculateMass(RP=rp/1e6, D=rd, HTrans=ph, HHub_Ratio=hh/rd, WaterDepth=z, WaveHeight=swh, WavePeriod=swp, WindSpeed=V_ave, IP_item=MP_ref)
+#    masses.append(cur_mass[0][0])
+# # add transition piece (100t, from 22MW report)
+# masses = [x + 100000 for x in masses]
+masses = [985788.0033692981, 1006729.722727049, 1027991.492707832, 1049573.3133116479, 1071475.1845384957, 1093697.1063883766, 1116239.0788612892, 1139101.1019572348, 1162283.1756762124, 1185785.300018223, 1209607.4749832656, 1233749.7005713405, 1258211.9767824481, 1282994.3036165882, 1308096.6810737606, 1333519.1091539655, 1359261.587857203, 1385324.1171834725, 1411706.6971327746, 1438409.3277051093]
 
 # Fit a polynomial of degree 2
 # depthmass = np.genfromtxt('depth.mass', delimiter=',')
@@ -200,6 +205,10 @@ polynomial_gradients = np.polyder(polynomial)
 sample = False
 samps = 100    #number of samples 
 site.interp_method = 'linear'
+
+# process cables
+cables = np.array([[c["capacity_NrT"], c["cost_€_m"]] for c in cable_specs])
+cables_plot = np.array([[c["diameter_mm2"], c["capacity_NrT"], c["cost_€_m"]] for c in cable_specs])
 
 # defaults
 # neighbour wind farm with turbine coordinates and costs to consider
@@ -273,22 +282,21 @@ def lcoe_func(x, y, **kwargs):
         cab_data3 = G3.get_table()
         record_cable_metrics_multisub(metrics_recorder, Sequence, cab_data1, cab_data2, cab_data3, Sx, tur_nr)
         # gradients (for function later, to avoid double calculus)
-        dcable_length1, dcable_cost1 = wfn1.gradient(node_type='wind_turbines')
-        dcable_length2, dcable_cost2 = wfn2.gradient(node_type='wind_turbines')
-        dcable_length3, dcable_cost3 = wfn3.gradient(node_type='wind_turbines')
+        dcable_cost1, _ = wfn1.gradient(gradient_type='cost')
+        dcable_cost2, _ = wfn2.gradient(gradient_type='cost')
+        dcable_cost3, _ = wfn3.gradient(gradient_type='cost')
         # dcabel_length = np.vstack((dcable_length1,dcable_length2,dcable_length3))
         dcable_cost = np.vstack((dcable_cost1,dcable_cost2,dcable_cost3))
     else:
-        wfn = WindFarmNetwork(wt_x=x, wt_y=y, ss_x=Sx, ss_y=Sy, cables=cables)
+        wfn = WindFarmNetwork(turbinesC=np.column_stack((x, y)), substationsC=np.column_stack((Sx, Sy)), cables=cables)
         # Optimize cable layout with the given data
-        G = wfn.optimize()
+        wfn.optimize()
         # Costs
-        cable_cost = G.cost     # in Euro
-        # for recorder
-        cab_data = G.get_table()
-        record_cable_metrics_singlesub(metrics_recorder, cab_data, curzone, nnb, nb)
+        cable_cost = wfn.cost()     # in Euro
+        # recorder
+        record_cable_metrics_singlesub(metrics_recorder, wfn, curzone, nnb, nb)
         # gradients (for function later, to avoid double calculus)
-        dcable_length, dcable_cost = wfn.gradient(node_type='wind_turbines')
+        dcable_cost, _ = wfn.gradient(gradient_type='cost')
     # !! ToDo: Scale costs to same currency and year of reference
     #
     # 4.) lcoe
@@ -393,13 +401,13 @@ metrics_recorder = create_recorder(Sequence)
 #%% Convergence plotting script
 def plot_convergence(mr=None,item=None,plotstr=None,obj=1,overall=0,optfat=0):
     plt.figure(figsize=(5, 3))
-    plt.plot(np.array(mr['iteration']),[x if x!=0 else np.NaN for x in mr[item+'_north']], label='North', linewidth = 1)
-    plt.plot(np.array(mr['iteration']),[x if x!=0 else np.NaN for x in mr[item+'_mid']], label='Mid', linewidth = 1)
-    plt.plot(np.array(mr['iteration']),[x if x!=0 else np.NaN for x in mr[item+'_south']], label='South', linewidth = 1)
+    plt.plot(np.array(mr['iteration']),[x if x!=0 else np.nan for x in mr[item+'_north']], label='North', linewidth = 1)
+    plt.plot(np.array(mr['iteration']),[x if x!=0 else np.nan for x in mr[item+'_mid']], label='Mid', linewidth = 1)
+    plt.plot(np.array(mr['iteration']),[x if x!=0 else np.nan for x in mr[item+'_south']], label='South', linewidth = 1)
     if obj:
-        plt.plot(np.array(mr['iteration']),[x if x!=0 else np.NaN for x in mr[item]], label='Overall', linewidth = 1)
+        plt.plot(np.array(mr['iteration']),[x if x!=0 else np.nan for x in mr[item]], label='Overall', linewidth = 1)
     if overall:
-        plt.plot(np.array(mr['iteration']),[x if x!=0 else np.NaN for x in mr[item+'_all']], label='Overall', linewidth = 1)
+        plt.plot(np.array(mr['iteration']),[x if x!=0 else np.nan for x in mr[item+'_all']], label='Overall', linewidth = 1)
     if optfat:
         for i in range(0,len(mr['lcoe_all'])-1):
             if i == 0:
@@ -440,7 +448,7 @@ if Mode == 'cooperative':
     
     # Plot or not
     if plot_iter:
-        plot_comp = XYPlotCompBathym(save_plot_per_iteration=True, plot_initial=False, memory=0, X=X_utm, Y=Y_utm, Z=Z, Sx=Sub_x, Sy=Sub_y, cables=cables, metrics_recorder=metrics_recorder, folder=plot_folder, sampling=sample, obj=obj, ploteach=plot_each)
+        plot_comp = XYPlotCompBathym(save_plot_per_iteration=True, plot_initial=False, memory=0, X=X_utm, Y=Y_utm, Z=Z, Sx=Sub_x, Sy=Sub_y, cables=cables_plot, metrics_recorder=metrics_recorder, folder=plot_folder, sampling=sample, obj=obj, ploteach=plot_each)
     else:
         plot_comp = None
     
@@ -557,7 +565,7 @@ elif Mode == 'competitive':
         
         # Plot or not
         if plot_iter:
-            plot_comp = XYPlotCompBathym(save_plot_per_iteration=True, plot_initial=False, memory=0, X=X_utm, Y=Y_utm, Z=Z, Sx=Sub_x, Sy=Sub_y, cables=cables, metrics_recorder=metrics_recorder, Xn=xn, Yn=yn, b=boundplot, opt_nr=opt_nr, folder=plot_folder, sampling=sample, obj=obj, ploteach=plot_each)
+            plot_comp = XYPlotCompBathym(save_plot_per_iteration=True, plot_initial=False, memory=0, X=X_utm, Y=Y_utm, Z=Z, Sx=Sub_x, Sy=Sub_y, cables=cables_plot, metrics_recorder=metrics_recorder, Xn=xn, Yn=yn, b=boundplot, opt_nr=opt_nr, folder=plot_folder, sampling=sample, obj=obj, ploteach=plot_each)
         else:
             plot_comp = None
         
@@ -659,7 +667,7 @@ elif Mode == 'evaluate_sequ':
     print(lcoe)
     # plot
     plt.figure()
-    plot = XYPlotCompBathym(save_plot_per_iteration=True, plot_initial=False, memory=0, X=X_utm, Y=Y_utm, Z=Z, Sx=Sub_x, Sy=Sub_y, cables=cables, metrics_recorder=metrics_recorder, Xn=xn, Yn=yn, b=boundplot, opt_nr=opt_nr, folder=plot_folder, sampling=sample, obj=obj)
+    plot = XYPlotCompBathym(save_plot_per_iteration=True, plot_initial=False, memory=0, X=X_utm, Y=Y_utm, Z=Z, Sx=Sub_x, Sy=Sub_y, cables=cables_plot, metrics_recorder=metrics_recorder, Xn=xn, Yn=yn, b=boundplot, opt_nr=opt_nr, folder=plot_folder, sampling=sample, obj=obj)
     inputs = {}
     inputs['x'] = np.array(x0)
     inputs['y'] = np.array(y0)
@@ -735,7 +743,7 @@ elif Mode == 'evaluate_multiter':
             # plot
             if plot_iter:
                 plt.figure()
-                plot = XYPlotCompBathym(save_plot_per_iteration=True, plot_initial=False, memory=0, X=X_utm, Y=Y_utm, Z=Z, Sx=Sub_x, Sy=Sub_y, cables=cables, metrics_recorder=metrics_recorder, Xn=xn, Yn=yn, b=boundplot, opt_nr=1, folder=plot_folder, sampling=sample, obj=obj, optimize=False, iter_nr = i)
+                plot = XYPlotCompBathym(save_plot_per_iteration=True, plot_initial=False, memory=0, X=X_utm, Y=Y_utm, Z=Z, Sx=Sub_x, Sy=Sub_y, cables=cables_plot, metrics_recorder=metrics_recorder, Xn=xn, Yn=yn, b=boundplot, opt_nr=1, folder=plot_folder, sampling=sample, obj=obj, optimize=False, iter_nr = i)
                 inputs = {}
                 inputs['x'] = np.array(x0)
                 inputs['y'] = np.array(y0)
@@ -757,7 +765,7 @@ elif Mode == 'evaluate_multiter':
                 xn = np.concatenate([xn, data['x_' + zone][-1]])
                 yn = np.concatenate([yn, data['y_' + zone][-1]])
             plt.figure()
-            plot = XYPlotCompBathym(save_plot_per_iteration=True, plot_initial=True, memory=0, X=X_utm, Y=Y_utm, Z=Z, Sx=Sub_x, Sy=Sub_y, cables=cables, metrics_recorder=metrics_recorder, Xn=xn, Yn=yn, b=boundplot, opt_nr=opt_nr, folder=plot_folder, sampling=sample, obj=obj, optimize=False)
+            plot = XYPlotCompBathym(save_plot_per_iteration=True, plot_initial=True, memory=0, X=X_utm, Y=Y_utm, Z=Z, Sx=Sub_x, Sy=Sub_y, cables=cables_plot, metrics_recorder=metrics_recorder, Xn=xn, Yn=yn, b=boundplot, opt_nr=opt_nr, folder=plot_folder, sampling=sample, obj=obj, optimize=False)
             inputs = {}
             curzone = metrics_recorder['cur_zone'][-1]
             inputs['x'] = np.array(np.array(data['x_' + curzone[-1]][-1]))
