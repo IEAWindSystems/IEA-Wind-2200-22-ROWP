@@ -63,10 +63,12 @@ def record_cable_metrics_singlesub(metrics_recorder, wfn, curzone, nnb, nb):
     # get connection matrix
     u_fnt = []
     v_fnt = []
+    fnT = wfn.G.graph.get('fnT', None)
+    fnT_state = fnT is None
     for u, v in wfn.G.edges():
-        if 'fnT' in wfn.G.graph:
-            u_fnt.append(int(wfn.G.graph['fnT'][u]))
-            v_fnt.append(int(wfn.G.graph['fnT'][v]))
+         u_fnt.append(u if fnT_state else fnT[u])
+         v_fnt.append(v if fnT_state else fnT[v])
+
     # record
     metrics_recorder["cable_u_" + curzone].append(u_fnt)
     metrics_recorder["cable_v_" + curzone].append(v_fnt)
