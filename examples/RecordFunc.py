@@ -72,7 +72,7 @@ def record_cable_metrics_singlesub(metrics_recorder, wfn, curzone, nnb, nb):
     # record
     metrics_recorder["cable_u_" + curzone].append(u_fnt)
     metrics_recorder["cable_v_" + curzone].append(v_fnt)
-    metrics_recorder["cable_type_" + curzone].append([t[2]['cable'] for t in cab_data])
+    metrics_recorder["cable_type_" + curzone].append(cab_data['cable'].tolist()) #([t[2]['cable'] for t in cab_data])
 
     for zone in nnb:
         metrics_recorder["cable_u_" + zone].append([])
