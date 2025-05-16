@@ -579,7 +579,7 @@ elif Mode == 'competitive':
         if i < len(list(set(Sequence))):
             learning_rate = windTurbines.diameter()*0.2
         elif i < 2*len(list(set(Sequence))):
-            learning_rate = windTurbines.diameter()*0.1
+            learning_rate = windTurbines.diameter()*0.2
         else:
             learning_rate = windTurbines.diameter()*0.05
         
@@ -765,12 +765,34 @@ elif Mode == 'evaluate_multiter':
                 xn = np.concatenate([xn, data['x_' + zone][-1]])
                 yn = np.concatenate([yn, data['y_' + zone][-1]])
             plt.figure()
-            plot = XYPlotCompBathym(save_plot_per_iteration=True, plot_initial=True, memory=0, X=X_utm, Y=Y_utm, Z=Z, Sx=Sub_x, Sy=Sub_y, cables=cables_plot, metrics_recorder=metrics_recorder, Xn=xn, Yn=yn, b=boundplot, opt_nr=opt_nr, folder=plot_folder, sampling=sample, obj=obj, optimize=False)
+            
+            import matplotlib.font_manager as font_manager
+            font_dir = ["font\Serif"]
+            for font in font_manager.findSystemFonts(font_dir):
+                font_manager.fontManager.addfont(font)
+            plt.rcParams["font.family"] = "Serif"
+                
+            plot = XYPlotCompBathym(save_plot_per_iteration=True, plot_initial=True, memory=0, X=X_utm, Y=Y_utm, Z=Z, Sx=Sub_x, Sy=Sub_y, cables=cables_plot, metrics_recorder=metrics_recorder, Xn=xn, Yn=yn, b=boundplot, opt_nr=opt_nr, folder=plot_folder, sampling=sample, obj=obj, optimize=False, paper=True)
             inputs = {}
             curzone = metrics_recorder['cur_zone'][-1]
             inputs['x'] = np.array(np.array(data['x_' + curzone[-1]][-1]))
             inputs['y'] = np.array(np.array(data['y_' + curzone[-1]][-1]))
             plot.compute(inputs,[])
+            
+            plt.gcf().subplots_adjust(
+                top=0.995,
+                bottom=0.088,
+                left=0.0,
+                right=0.83,
+                hspace=0.2,
+                wspace=0.2
+            )
+            plt.gcf().savefig("Layout.pdf", dpi=500, pad_inches=0)
+            
+            # plt.text(555000, 5842000, 'N', color='white', fontsize=22, ha='center', va='center')
+            # plt.text(548000, 5833000, 'M', color='white', fontsize=22, ha='center', va='center')
+            # plt.text(543000, 5823000, 'S', color='white', fontsize=22, ha='center', va='center')
+            # plt.gcf().savefig("Bathymetry.pdf", pad_inches=0, dpi=500)
             
     plot_convergence(mr=metrics_recorder,item='lcoe',plotstr='LCOE (€/MWh)',obj=0,overall=0,optfat=1)
     plot_convergence(mr=metrics_recorder,item='aep',plotstr='AEP (GWh)',obj=0,overall=0,optfat=1)

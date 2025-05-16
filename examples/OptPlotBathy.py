@@ -30,7 +30,7 @@ class XYPlotCompBathym(ExplicitComponent):
     # colors = ['b', 'r', 'm', 'c', 'g', 'y', 'orange', 'indigo', 'grey'] * 100
     colors = [c['color'] for c in iter(matplotlib.rcParams['axes.prop_cycle'])] * 100
 
-    def __init__(self, memory=10, delay=0.001, plot_initial=True, plot_improvements_only=False, ax=None, legendloc=1, save_plot_per_iteration=False, X=None, Y=None, Z=None, Sx=None, Sy=None, cables=None, metrics_recorder=None, Xn=[], Yn=[], b=[], opt_nr=None, folder='Figures', sampling=False, obj=None, optimize=True, ploteach=1, iter_nr=1):
+    def __init__(self, memory=10, delay=0.001, plot_initial=True, plot_improvements_only=False, ax=None, legendloc=1, save_plot_per_iteration=False, X=None, Y=None, Z=None, Sx=None, Sy=None, cables=None, metrics_recorder=None, Xn=[], Yn=[], b=[], opt_nr=None, folder='Figures', sampling=False, obj=None, optimize=True, ploteach=1, iter_nr=1, paper=False):
         """Initialize component for plotting turbine locations
 
         Parameters
@@ -77,6 +77,7 @@ class XYPlotCompBathym(ExplicitComponent):
         self.optimize = optimize
         self.ploteach = ploteach
         self.iter_nr = iter_nr
+        self.paper = paper
     @property
     def ax(self):
         return self._ax or plt.gca()
@@ -109,7 +110,11 @@ class XYPlotCompBathym(ExplicitComponent):
     def init_plot(self, limits):
         self.ax.cla()
         fig = plt.gcf()
-        fig.set_size_inches(10, 5)
+        if self.paper:
+            fig.set_size_inches(6.97, 4.5)
+        else:
+            fig.set_size_inches(10, 5)
+            fig.tight_layout()
         # self.ax.axis('equal')
 
         mi = limits.min(0)
@@ -122,6 +127,10 @@ class XYPlotCompBathym(ExplicitComponent):
         
     def plot_bathymetry(self):
         CS = self.ax.contourf(self.X[0], self.Y[1], -self.Z, 100, cmap=plt.colormaps.get_cmap('Blues'))
+        CS.set_linewidth(0)  # Or use a list of widths if you need different values per level
+        CS.set_edgecolor('face')  # Alternatively, you could use this to turn off edges
+        if self.paper:
+            CS.set_rasterized(True)
         self.ax.set_aspect(1)
         fig = plt.gcf()
         # Check if a colorbar already exists in the figure
@@ -168,15 +177,21 @@ class XYPlotCompBathym(ExplicitComponent):
             self.ax.plot([], [], '>k', markerfacecolor="#00000000", markeredgecolor='k', label='Initial position')
 
     def plot_current_position(self, x, y):
-        for c, x_, y_ in zip(self.colors, x, y):
-            self.ax.plot(x_, y_, 'o', color=c, ms=5)
-            self.ax.plot(x_, y_, 'xk', ms=4)
-        self.ax.plot([], [], 'xk', label='Current position')
+        if self.paper:
+            self.ax.scatter(x, y, c='darkorange', marker='2', zorder=3, linewidth=1.5, label='Turbine')
+        else:
+            for c, x_, y_ in zip(self.colors, x, y):
+                self.ax.plot(x_, y_, 'o', color=c, ms=5)
+                self.ax.plot(x_, y_, 'xk', ms=4)
+            self.ax.plot([], [], 'xk', label='Current position')
         
     def plot_nb_position(self, x, y):
-        for c, x_, y_ in zip(self.colors, x, y):
-            self.ax.plot(x_, y_, 'o', color=c, ms=5)
-            self.ax.plot(x_, y_, 'xk', ms=4)
+        if self.paper:
+            self.ax.scatter(x, y, c='darkorange', marker='2', zorder=3, linewidth=1.5)
+        else:
+            for c, x_, y_ in zip(self.colors, x, y):
+                self.ax.plot(x_, y_, 'o', color=c, ms=5)
+                self.ax.plot(x_, y_, 'xk', ms=4)
         
     def plot_boundaries(self):
         b = self.b
@@ -191,7 +206,8 @@ class XYPlotCompBathym(ExplicitComponent):
                 self.ax.plot(bx,by,color='k',linewidth=0.5)
         
     def plot_cables(self,x,y):
-        CabName = ['Cable A=' + str(self.cables[0][0]) + 'mm²','Cable A=' + str(self.cables[1][0]) + 'mm²','Cable A=' + str(self.cables[2][0]) + 'mm²']
+        # CabName = ['Cable A=' + str(round(self.cables[0][0])) + 'mm²','Cable A=' + str(round(self.cables[1][0])) + 'mm²','Cable A=' + str(round(self.cables[2][0])) + 'mm²']
+        CabName = [f'Cable A={round(c[0])}mm²' for c in self.cables]
         # go through the different zones
         plot2 = 0           # helper to plot legend of cable types only once
         cabplot = [0,0,0]   #            - " -
@@ -214,8 +230,10 @@ class XYPlotCompBathym(ExplicitComponent):
                         plot2 = plot2 + 1
                     else:
                         self.ax.plot([AllX[con[i][0]],AllX[con[i][1]]],[AllY[con[i][0]],AllY[con[i][1]]],color='firebrick',linewidth=lw[con[i][2]])
-        # d) Plot Substation
+        
+    def plot_substations(self):
         self.ax.scatter(list(self.Sx.values()),list(self.Sy.values()),marker='s',s=7,color='k', zorder=3,label='Substation')
+    
     def set_title(self):
         # Overall optimization
         if self.opt_nr:
@@ -281,11 +299,13 @@ class XYPlotCompBathym(ExplicitComponent):
             y = inputs['y']
 
             self.plot_cables(x,y)
+            self.plot_substations()
             self.plot_current_position(x, y)
             if len(self.Xn) > 0:
                 self.plot_nb_position(self.Xn,self.Yn)
             
-            self.set_title()
+            if not self.paper:
+                self.set_title()
             self.ax.legend(loc='upper left',fontsize=7)
             
             self.ax.grid(alpha=0.6)
@@ -301,6 +321,8 @@ class XYPlotCompBathym(ExplicitComponent):
             self.ax.set_xlim([534700,561000])
             self.ax.set_ylim([5813500,5852500])
             
+            plt.gcf().tight_layout()
+                     
             if self.counter == 0:
                 plt.pause(1e-6)
             mypause(self.delay)
