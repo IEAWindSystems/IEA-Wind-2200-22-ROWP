@@ -23,7 +23,7 @@ import windIO
 from pathlib import Path
 from scipy.interpolate import RegularGridInterpolator
 # from ssms.CalculateMass import CalculateMass
-from optiwindnet.api import WindFarmNetwork
+from optiwindnet.api import WindFarmNetwork, ModelOptions, MILP, MetaHeuristic
 from shapely.geometry import Point, Polygon
 from topfarm.constraint_components.boundary import MultiWFBoundaryConstraint, BoundaryType
 from RecordFunc import create_recorder, record_cable_metrics_singlesub, record_cable_metrics_multisub, record_main_metrics_multisub, record_main_metrics_singlesub
@@ -33,16 +33,18 @@ np.random.seed(2)
 # farm layout
 Mode = 'competitive'    # 'cooperative' or 'competitive' or 'evaluate_sequ' or 'evaluate_multiter'
 Sequence = ['north','mid','south','north','mid','south','north','mid','south']
-Continue = False         # set to True if you give foregoing metrics_recorder to continue optimization
+# Sequence = ['north','mid','south']
+CableSolver = 'MetaHeuristic'   # 'Heuristic', 'MetaHeuristic', 'MILP_cplex' or 'MILP_ortools'
+Continue = False        # set to True if you give foregoing metrics_recorder to continue optimization
 Model = 'gauss'
 plot_conv = True
 tur_nr = [33,33,34]     # Desired turbine number in optimized farm, from north to south!
 obj = 'lcoe'            # 'lcoe' or 'aep'
 plot_iter = True
-plot_each = 10          # define in which interval a plot should be made
+plot_each = 10           # define in which interval a plot should be made
 
 # monopile optimization
-MP_ref = 1          # reference turbine type for monopile mass scaling. 0 = 10MW, 1 = 15MW, 2 = 3.4MW
+MP_ref = 1           # reference turbine type for monopile mass scaling. 0 = 10MW, 1 = 15MW, 2 = 3.4MW
 
 # lcoe parameters
 d = 0.05             # [-] discount rate
@@ -206,9 +208,17 @@ sample = False
 samps = 100    #number of samples 
 site.interp_method = 'linear'
 
-# process cables
+# Cable optimization
 cables = np.array([[c["capacity_NrT"], c["cost_€_m"]] for c in cable_specs])
 cables_plot = np.array([[c["diameter_mm2"], c["capacity_NrT"], c["cost_€_m"]] for c in cable_specs])
+if CableSolver == 'MetaHeuristic':
+    router = MetaHeuristic(time_limit=5)
+elif CableSolver == 'Heuristic':
+    router = None   # use default
+elif CableSolver == 'MILP_cplex':
+    router = MILP(solver_name='cplex', time_limit=15, mip_gap=0.02, verbose=False)
+elif CableSolver =='MILP_ortools':
+    MILP(solver_name='ortools', time_limit=15, mip_gap=0.01, verbose=False)
 
 # defaults
 # neighbour wind farm with turbine coordinates and costs to consider
@@ -288,7 +298,7 @@ def lcoe_func(x, y, **kwargs):
         # dcabel_length = np.vstack((dcable_length1,dcable_length2,dcable_length3))
         dcable_cost = np.vstack((dcable_cost1,dcable_cost2,dcable_cost3))
     else:
-        wfn = WindFarmNetwork(turbinesC=np.column_stack((x, y)), substationsC=np.column_stack((Sx, Sy)), cables=cables)
+        wfn = WindFarmNetwork(turbinesC=np.column_stack((x, y)), substationsC=np.column_stack((Sx, Sy)), cables=cables, router=router)
         # Optimize cable layout with the given data
         wfn.optimize()
         # Costs
