@@ -212,13 +212,14 @@ site.interp_method = 'linear'
 cables = np.array([[c["capacity_NrT"], c["cost_€_m"]] for c in cable_specs])
 cables_plot = np.array([[c["diameter_mm2"], c["capacity_NrT"], c["cost_€_m"]] for c in cable_specs])
 if CableSolver == 'MetaHeuristic':
-    router = MetaHeuristic(time_limit=5)
+    router = MetaHeuristic(time_limit=0.3)
 elif CableSolver == 'Heuristic':
     router = None   # use default
 elif CableSolver == 'MILP_cplex':
-    router = MILP(solver_name='cplex', time_limit=15, mip_gap=0.02, verbose=False)
+    router = MILP(solver_name='cplex', time_limit=5, mip_gap=0.005, verbose=False)
 elif CableSolver =='MILP_ortools':
-    MILP(solver_name='ortools', time_limit=15, mip_gap=0.01, verbose=False)
+    # Note: time_limit changes over iterations later
+    MILP(solver_name='ortools', time_limit=5, mip_gap=0.005, verbose=False)
 
 # defaults
 # neighbour wind farm with turbine coordinates and costs to consider
@@ -589,9 +590,18 @@ elif Mode == 'competitive':
         if i < len(list(set(Sequence))):
             learning_rate = windTurbines.diameter()*0.2
         elif i < 2*len(list(set(Sequence))):
-            learning_rate = windTurbines.diameter()*0.2
+            learning_rate = windTurbines.diameter()*0.15
+        elif i < 3*len(list(set(Sequence))):
+            learning_rate = windTurbines.diameter()*0.1
         else:
             learning_rate = windTurbines.diameter()*0.05
+        
+        # Same for time parameter in case of MILP cabling optimization. Set down computational time for re-iterations
+        if i > len(list(set(Sequence))):
+            if CableSolver =='MILP_ortools':
+                MILP(solver_name='ortools', time_limit=3, mip_gap=0.005, verbose=False)
+            elif CableSolver == 'MILP_cplex':
+                router = MILP(solver_name='cplex', time_limit=3, mip_gap=0.005, verbose=False)
         
         # Optimization Setup
         tf = TopFarmProblem(
