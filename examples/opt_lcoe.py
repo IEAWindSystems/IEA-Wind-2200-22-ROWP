@@ -219,7 +219,7 @@ elif CableSolver == 'MILP_cplex':
     router = MILP(solver_name='cplex', time_limit=5, mip_gap=0.005, verbose=False)
 elif CableSolver =='MILP_ortools':
     # Note: time_limit changes over iterations later
-    MILP(solver_name='ortools', time_limit=5, mip_gap=0.005, verbose=False)
+    router = MILP(solver_name='ortools', time_limit=5, mip_gap=0.005, verbose=False)
 
 # defaults
 # neighbour wind farm with turbine coordinates and costs to consider
@@ -599,7 +599,7 @@ elif Mode == 'competitive':
         # Same for time parameter in case of MILP cabling optimization. Set down computational time for re-iterations
         if i > len(list(set(Sequence))):
             if CableSolver =='MILP_ortools':
-                MILP(solver_name='ortools', time_limit=3, mip_gap=0.005, verbose=False)
+                router = MILP(solver_name='ortools', time_limit=3, mip_gap=0.005, verbose=False)
             elif CableSolver == 'MILP_cplex':
                 router = MILP(solver_name='cplex', time_limit=3, mip_gap=0.005, verbose=False)
         
