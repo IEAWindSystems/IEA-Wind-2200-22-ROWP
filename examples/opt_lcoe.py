@@ -10,7 +10,7 @@ import pickle
 from py_wake.site import XRSite
 from py_wake.wind_turbines import WindTurbine
 from py_wake.wind_turbines.power_ct_functions import PowerCtTabular
-from py_wake import NOJ, BastankhahGaussian
+from py_wake import NOJ, BastankhahGaussian, Nygaard_2022
 from topfarm.cost_models.cost_model_wrappers import CostModelComponent
 from topfarm.easy_drivers import EasySGDDriver
 from OptPlotBathy import XYPlotCompBathym
@@ -32,11 +32,11 @@ np.random.seed(2)
 #%% INPUTS
 # farm layout
 Mode = 'competitive'    # 'cooperative' or 'competitive' or 'evaluate_sequ' or 'evaluate_multiter'
-Sequence = ['north','mid','south','north','mid','south','north','mid','south']
+Sequence = ['north','mid','south','north','mid','south','north','mid','south','north','mid','south','north','mid','south']
 # Sequence = ['north','mid','south']
 CableSolver = 'MetaHeuristic'   # 'Heuristic', 'MetaHeuristic', 'MILP_cplex' or 'MILP_ortools'
 Continue = False        # set to True if you give foregoing metrics_recorder to continue optimization
-Model = 'gauss'
+Model = 'turbopark'     # 'jensen', 'gauss' or 'turbopark'
 plot_conv = True
 tur_nr = [33,33,34]     # Desired turbine number in optimized farm, from north to south!
 obj = 'lcoe'            # 'lcoe' or 'aep'
@@ -113,7 +113,9 @@ if Model == 'jensen':
     wake_model = NOJ(site, windTurbines, k=0.05, rotorAvgModel=RotorCenter())
 elif Model == 'gauss':
     wake_model = BastankhahGaussian(site, windTurbines, rotorAvgModel=RotorCenter(), turbulenceModel=CrespoHernandez())
-
+elif Model == 'turbopark':
+    wake_model = Nygaard_2022(site, windTurbines)
+    
 # wind resource
 dirs = np.arange(0, 360, 1) #wind directions
 ws = np.arange(cut_in, cut_out+1, 1)
