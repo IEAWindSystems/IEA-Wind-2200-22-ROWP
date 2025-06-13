@@ -7,6 +7,7 @@ import xarray as xr
 import os
 import utm
 import pickle
+from datetime import datetime
 from py_wake.site import XRSite
 from py_wake.wind_turbines import WindTurbine
 from py_wake.wind_turbines.power_ct_functions import PowerCtTabular
@@ -664,6 +665,8 @@ elif Mode == 'competitive':
         
     # go through each zone as specified in Sequenc
     for i in loop_range:
+        now = datetime.now()
+        print('Evaluate zone ' + str(i) + '/' + str(len(Sequence)) + '. Time: ' + now.strftime("%H:%M:%S"))
         opt_nr = i+1
         curzone = Sequence[i]
         # Initial Layout
