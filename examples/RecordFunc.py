@@ -54,11 +54,15 @@ def create_recorder(Sequence):
         "y_south": [],
         "x_final": [],
         "y_final": [],
-        "lcoe_final": []
+        "lcoe_final": [],
+        "sgd_constraint_violation": [],
+        "tur_dist_violation": [],
+        "bound_violation": [],
+        "settings": []
     }
     return metrics_recorder
 
-def record_cable_metrics_singlesub(metrics_recorder, wfn, curzone, nnb, nb):
+def record_cable_metrics(metrics_recorder, wfn, curzone, nnb, nb):
     cab_data = wfn.get_network()
     # get connection matrix
     u_fnt = []
@@ -83,70 +87,31 @@ def record_cable_metrics_singlesub(metrics_recorder, wfn, curzone, nnb, nb):
         metrics_recorder["cable_u_" + zone].append(metrics_recorder['cable_u_' + zone][-1])
         metrics_recorder["cable_v_" + zone].append(metrics_recorder['cable_v_' + zone][-1])
         metrics_recorder["cable_type_" + zone].append(metrics_recorder['cable_type_' + zone][-1])
-        
-def record_cable_metrics_multisub(metrics_recorder, Sequence, cab_data1, cab_data2, cab_data3, Sx, tur_nr):
-    metrics_recorder["cable_u_" + Sequence[0]].append(cab_data1['u'].tolist())
-    metrics_recorder["cable_v_" + Sequence[0]].append(cab_data1['v'].tolist())
-    metrics_recorder["cable_u_" + Sequence[1]].append(cab_data2['u'].tolist())
-    metrics_recorder["cable_v_" + Sequence[1]].append(cab_data2['v'].tolist())
-    metrics_recorder["cable_u_" + Sequence[2]].append(cab_data3['u'].tolist())
-    metrics_recorder["cable_v_" + Sequence[2]].append(cab_data3['v'].tolist())
-    metrics_recorder["cable_type_" + Sequence[0]].append(cab_data1['cable'].tolist())
-    metrics_recorder["cable_type_" + Sequence[1]].append(cab_data2['cable'].tolist())
-    metrics_recorder["cable_type_" + Sequence[2]].append(cab_data3['cable'].tolist())
-    #
-    metrics_recorder["cable_u"].append([x+len(Sx)-1 if x != 1 else x for x in cab_data1['u'].tolist()] + [x+len(Sx)-1+tur_nr[0] if x != 1 else x+1 for x in cab_data2['u'].tolist()] + [x+len(Sx)-1+sum(tur_nr[0:2]) if x != 1 else x+2 for x in cab_data3['u'].tolist()])
-    metrics_recorder["cable_v"].append([y+len(Sx)-1 if y != 1 else y for y in cab_data1['v'].tolist()] + [y+len(Sx)-1+tur_nr[0] if y != 1 else y+1 for y in cab_data2['v'].tolist()] + [y+len(Sx)-1+sum(tur_nr[0:2]) if y != 1 else y+2 for y in cab_data3['v'].tolist()])
-    metrics_recorder["cable_type"].append(cab_data1['cable'].tolist() + cab_data2['cable'].tolist() + cab_data3['cable'].tolist())
 
-def record_main_metrics_multisub(metrics_recorder, opt_nr, aep, x, y, mp_cost, cable_cost, lcoe,
-                               tur_nr, G1, G2, G3, capex, LP, CRF, OpexAnnual, **kwargs):
-
+def record_main_metrics_multisub(metrics_recorder, opt_nr, aep, x, y, mp_cost, cable_costs, lcoe,
+                               curzone, nb, nnb, wf, tur_nr, cable_cost_n, mp_cost_n,
+                               npv, capex, LP, CRF, OpexAnnual, Sequence, **kwargs):
     metrics_recorder["iteration"].append(kwargs.get("iteration", len(metrics_recorder["iteration"]) + 1))
     metrics_recorder["opt_nr"].append(opt_nr)
     metrics_recorder["aep"].append(aep.isel(wt=slice(0,len(x))).sum().item())
-    metrics_recorder["mp_cost"].append(sum(mp_cost))
-    metrics_recorder["cable_cost"].append(cable_cost)
-    metrics_recorder["lcoe"].append(lcoe)
-    # store the values of the individual zones
-    metrics_recorder["x_north"].append(x[:tur_nr[0]].flatten().tolist())
-    metrics_recorder["y_north"].append(y[:tur_nr[0]].flatten().tolist())
-    metrics_recorder["x_mid"].append(x[tur_nr[0]:sum(tur_nr[0:2])].flatten().tolist())
-    metrics_recorder["y_mid"].append(y[tur_nr[0]:sum(tur_nr[0:2])].flatten().tolist())
-    metrics_recorder["x_south"].append(x[sum(tur_nr[0:2]):].flatten().tolist())
-    metrics_recorder["y_south"].append(y[sum(tur_nr[0:2]):].flatten().tolist())
-    mp_cost1 = np.sum(mp_cost[:tur_nr[0]])
-    mp_cost2 = np.sum(mp_cost[tur_nr[0]:sum(tur_nr[0:2])])
-    mp_cost3 = np.sum(mp_cost[sum(tur_nr[0:2]):])
-    cable_cost1 = G1.cost
-    cable_cost2 = G2.cost 
-    cable_cost3 = G3.cost
-    npv1 = (capex*tur_nr[0] + mp_cost1 + cable_cost1 + LP*tur_nr[0]) * CRF + OpexAnnual*tur_nr[0]
-    npv2 = (capex*tur_nr[1] + mp_cost2 + cable_cost2 + LP*tur_nr[1]) * CRF + OpexAnnual*tur_nr[1]
-    npv3 = (capex*tur_nr[2] + mp_cost3 + cable_cost3 + LP*tur_nr[2]) * CRF + OpexAnnual*tur_nr[2]
-    aep1 = aep.isel(wt=slice(0,tur_nr[0])).sum().item()
-    aep2 = aep.isel(wt=slice(tur_nr[0],sum(tur_nr[0:2]))).sum().item()
-    aep3 = aep.isel(wt=slice(sum(tur_nr[0:2]),None)).sum().item()
-    lcoe1 = npv1 / aep1
-    lcoe2 = npv2 / aep2
-    lcoe3 = npv3 / aep3
-    metrics_recorder["aep_north"].append(aep1)
-    metrics_recorder["aep_mid"].append(aep2)
-    metrics_recorder["aep_south"].append(aep3)
+    metrics_recorder["mp_cost"].append(float(sum(mp_cost)))
+    metrics_recorder["cable_cost"].append(sum(cable_costs))
+    metrics_recorder["lcoe"].append(float(lcoe))
+    metrics_recorder["cur_zone"].append([curzone])
+    
+    indices = [np.arange(sum(tur_nr[:idx]), sum(tur_nr[:idx + 1])) for idx in range(len(wf))]
+    for z, zone in enumerate(Sequence):
+        metrics_recorder["neighbours"].append(nb)
+        metrics_recorder["x_" + zone].append(x[indices[z]].flatten().tolist())
+        metrics_recorder["y_" + zone].append(y[indices[z]].flatten().tolist())
+        metrics_recorder["aep_" + zone].append(aep.isel(wt=slice(min(indices[z]),max(indices[z]+1))).sum().item())
+        metrics_recorder["cable_cost_" + zone].append(cable_costs[z])
+        metrics_recorder["mp_cost_" + zone].append(float(sum(mp_cost[indices[z]])))
+        metrics_recorder["lcoe_" + zone].append(float(((capex*tur_nr[z] + sum(mp_cost[indices[z]]) + cable_costs[z] + LP*tur_nr[z]) * CRF + OpexAnnual*tur_nr[z]) / aep.isel(wt=slice(min(indices[z]),max(indices[z]+1))).sum().item()))
     metrics_recorder["aep_all"].append(np.sum(aep).item())
-    metrics_recorder["cable_cost_north"].append(cable_cost1)
-    metrics_recorder["cable_cost_mid"].append(cable_cost2)
-    metrics_recorder["cable_cost_south"].append(cable_cost3)
-    metrics_recorder["cable_cost_all"].append(cable_cost)
-    metrics_recorder["mp_cost_north"].append(mp_cost1)
-    metrics_recorder["mp_cost_mid"].append(mp_cost2)
-    metrics_recorder["mp_cost_south"].append(mp_cost3)
-    metrics_recorder["mp_cost_all"].append(sum(mp_cost))
-    metrics_recorder["lcoe_north"].append(lcoe1)
-    metrics_recorder["lcoe_mid"].append(lcoe2)
-    metrics_recorder["lcoe_south"].append(lcoe3)
-    metrics_recorder["lcoe_all"].append(lcoe)
-
+    metrics_recorder["lcoe_all"].append(float(lcoe))
+    metrics_recorder["cable_cost_all"].append(sum(cable_costs))
+    metrics_recorder["mp_cost_all"].append(float(sum(mp_cost)))
 
 def record_main_metrics_singlesub(metrics_recorder, opt_nr, aep, x, y, mp_cost, cable_cost, lcoe,
                                curzone, nb, nnb, wf, tur_nr, cable_cost_n, mp_cost_n,
