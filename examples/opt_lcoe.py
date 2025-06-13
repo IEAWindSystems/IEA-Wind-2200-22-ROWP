@@ -27,8 +27,9 @@ from scipy.interpolate import RegularGridInterpolator
 from optiwindnet.api import WindFarmNetwork, ModelOptions, MILP, MetaHeuristic
 from shapely.geometry import Point, Polygon
 from topfarm.constraint_components.boundary import MultiWFBoundaryConstraint, BoundaryType
-from RecordFunc import create_recorder, record_cable_metrics, record_main_metrics_multisub, record_main_metrics_singlesub
-np.random.seed(2)
+from RecordFunc import create_recorder, record_cable_metrics, record_main_metrics_multisub, record_main_metrics_singlesub, record_results_constraints
+seed = 2
+np.random.seed(seed)
 #
 #%% INPUTS
 # General inputs
@@ -593,10 +594,8 @@ if Mode == 'cooperative':
         maximize = True
     
     # record settings
-    metrics_recorder['settings'].append({'Mode':Mode,'CableSolver':CableSolver,'Model':Model,'d_RD':d_RD,'tur_nr':tur_nr,'maxiter':maxiter,'learning_rate':learning_rate,'sgd_thresh':sgd_thresh,'curzone':curzone,'obj':obj,'Sequence':Sequence,'x0':x0,'y0':y0,'sample':sample,'samps':samps,'SepCabling':SepCabling,'Sx':Sx,'Sy':Sy,'depths':depths,'masses':masses,'Routers':Routers}) 
-    metrics_recorder["sgd_constraint_violation"].append(None) # first run no optimization
-    metrics_recorder['tur_dist_violation'].append(None)
-    metrics_recorder['bound_violation'].append(None)
+    metrics_recorder['settings'].append({'Mode':Mode,'CableSolver':CableSolver,'Model':Model,'seed:':seed,'d_RD':d_RD,'tur_nr':tur_nr,'maxiter':maxiter,'learning_rate':learning_rate,'sgd_thresh':sgd_thresh,'curzone':curzone,'obj':obj,'Sequence':Sequence,'x0':x0,'y0':y0,'sample':sample,'samps':samps,'SepCabling':SepCabling,'Sx':Sx,'Sy':Sy,'depths':depths,'masses':masses,'Routers':Routers}) 
+    [metrics_recorder[key].append(None) for key in ["sgd_constraint_violation", "tur_dist_violation", "bound_violation"]]   # first run: no optimization
     
     # Optimization setup
     tf = TopFarmProblem(
@@ -614,22 +613,12 @@ if Mode == 'cooperative':
     print('Optimization with SGD took: {:.0f}s'.format(toc-tic), ' with a total constraint violation of ', recorder['sgd_constraint'][-1])
 
     # Store
-    metrics_recorder["lcoe_final"].append([cost])
-    metrics_recorder["x_final"].append(state['x'].tolist())
-    metrics_recorder["y_final"].append(state['y'].tolist())
-    metrics_recorder["sgd_constraint_violation"] += recorder['sgd_constraint'].tolist()
-    # min spacing constraint
-    dv = np.sqrt(recorder['wtSeparationSquared']) - min_spacing_m
-    dv[dv > 0] = 0
-    metrics_recorder["tur_dist_violation"] += dv.sum(axis=1).tolist()
-    # boundary constraint
-    bv = recorder['boundaryDistances']
-    bv[bv > 0] = 0
-    metrics_recorder["bound_violation"] += bv.sum(axis=1).tolist()    
+    record_results_constraints(metrics_recorder, recorder, state, cost, min_spacing_m)
     
     # Save to a file
     with open(File + ".pkl", "wb") as file:
         pickle.dump({"metrics_recorder": metrics_recorder, "state": state, "recorder": recorder.recorder2list()}, file)
+        
     # Postprocess for full wind rose
     if sample:
         print('Optimization finished.')
@@ -729,10 +718,8 @@ elif Mode == 'competitive':
                        'MILP_ortools': MILP(solver_name='ortools', time_limit=3, mip_gap=0.005, verbose=False)}
         
         # record settings
-        metrics_recorder["sgd_constraint_violation"].append(None) # first run no optimizations
-        metrics_recorder['tur_dist_violation'].append(None)
-        metrics_recorder['bound_violation'].append(None)
-        metrics_recorder['settings'].append({'Mode':Mode,'CableSolver':CableSolver,'Model':Model,'d_RD':d_RD,'tur_nr':tur_nr,'maxiter':maxiter,'learning_rate':learning_rate,'sgd_thresh':sgd_thresh,'curzone':curzone,'obj':obj,'Sequence':Sequence,'x0':x0,'y0':y0,'sample':sample,'samps':samps,'SepCabling':SepCabling,'Sx':Sx,'Sy':Sy,'depths':depths,'masses':masses,'Routers':Routers}) 
+        [metrics_recorder[key].append(None) for key in ["sgd_constraint_violation", "tur_dist_violation", "bound_violation"]]   # first run: no optimization
+        metrics_recorder['settings'].append({'Mode':Mode,'CableSolver':CableSolver,'Model':Model,'seed:':seed,'d_RD':d_RD,'tur_nr':tur_nr,'maxiter':maxiter,'learning_rate':learning_rate,'sgd_thresh':sgd_thresh,'curzone':curzone,'obj':obj,'Sequence':Sequence,'x0':x0,'y0':y0,'sample':sample,'samps':samps,'SepCabling':SepCabling,'Sx':Sx,'Sy':Sy,'depths':depths,'masses':masses,'Routers':Routers}) 
         
         # Optimization Setup
         tf = TopFarmProblem(
@@ -749,18 +736,7 @@ elif Mode == 'competitive':
         print('Optimization with SGD took: {:.0f}s'.format(toc-tic), ' with a total constraint violation of ', recorder['sgd_constraint'][-1])
         
         # Store
-        metrics_recorder["lcoe_final"].append([cost])
-        metrics_recorder["x_final"].append(state['x'].tolist())
-        metrics_recorder["y_final"].append(state['y'].tolist())
-        metrics_recorder["sgd_constraint_violation"] += recorder['sgd_constraint'].tolist()
-        # min spacing constraint
-        dv = np.sqrt(recorder['wtSeparationSquared']) - min_spacing_m
-        dv[dv > 0] = 0
-        metrics_recorder["tur_dist_violation"] += dv.sum(axis=1).tolist()
-        # boundary constraint
-        bv = recorder['boundaryDistances']
-        bv[bv > 0] = 0
-        metrics_recorder["bound_violation"] += bv.sum(axis=1).tolist()  
+        record_results_constraints(metrics_recorder, recorder, state, cost, min_spacing_m)
         
         # Save recorder to file
         with open(File + ".pkl", "wb") as file:

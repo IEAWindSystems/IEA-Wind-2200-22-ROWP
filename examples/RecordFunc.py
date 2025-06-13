@@ -164,3 +164,19 @@ def record_main_metrics_singlesub(metrics_recorder, opt_nr, aep, x, y, mp_cost, 
     metrics_recorder["cable_cost_all"].append(sum(cable_cost_n) + cable_cost)
     metrics_recorder["mp_cost_all"].append(sum(mp_cost_n) + sum(mp_cost))
     metrics_recorder["lcoe_all"].append(sum(npv_all)/np.sum(aep).item())
+    
+def record_results_constraints(metrics_recorder, recorder, state, cost, min_spacing_m):
+    metrics_recorder["lcoe_final"].append([cost])
+    metrics_recorder["x_final"].append(state['x'].tolist())
+    metrics_recorder["y_final"].append(state['y'].tolist())
+    metrics_recorder["sgd_constraint_violation"] += recorder['sgd_constraint'].tolist()
+    
+    # min spacing constraint
+    dv = np.sqrt(recorder['wtSeparationSquared']) - min_spacing_m
+    dv[dv > 0] = 0
+    metrics_recorder["tur_dist_violation"] += dv.sum(axis=1).tolist()
+    
+    # boundary constraint
+    bv = recorder['boundaryDistances']
+    bv[bv > 0] = 0
+    metrics_recorder["bound_violation"] += bv.sum(axis=1).tolist()
