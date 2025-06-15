@@ -42,6 +42,7 @@ Model = 'turbopark'                     # 'jensen', 'gauss' or 'turbopark'
 tur_nr = [33,33,34]                     # Desired turbine number in optimized farm, from north to south!
 obj = 'lcoe'                            # 'lcoe' or 'aep'
 plot_iter = False                       # True or False: plot and store layouts during optimization each plot_each iterations
+plot_postpro = True                     # True or False: plot and store layouts during postprocessing (how often is linked to step)
 plot_each = 1                           # define in which interval a plot should be made
 d_RD = 8                                # min spacing distance in rotor diameters
 step = 20                               # at each "step" iterations, the full wind rose is recalculated in postprocessing (when sampling is used during opt)
@@ -465,8 +466,8 @@ def plot_convergence(mr=None,item=None,plotstr=None,obj=1,overall=0,optfat=0,fea
     fig.tight_layout()
     ax.set_xlim([0,max(mr['iteration'])])
     
-    ax.set_ylim([87.7, 95])
-    ax2.set_ylim([-0.3,7])
+    # ax.set_ylim([87.7, 95])
+    # ax2.set_ylim([-0.3,7])
     
 
 #%% Postprocessing script for full wind rose
@@ -530,7 +531,7 @@ def postprocess_recorder(data):
                 mp_cost_n[j]= data['mp_cost_' + zone][idx]
 
         boundplot = list(boundaries.values())
-        plot_folder = "EvalFigures_coop_turbopark_2D_6000it"
+        plot_folder = "Figures_processed_" + File
         opt_nr = data['opt_nr'][idx]
         metrics_recorder['sgd_constraint_violation'].append(data['sgd_constraint_violation'][idx])
         metrics_recorder['tur_dist_violation'].append(data['tur_dist_violation'][idx])
@@ -540,7 +541,7 @@ def postprocess_recorder(data):
         # run
         lcoe_func(x0,y0)
         # plot
-        if plot_iter:
+        if plot_postpro:
             plt.figure()
             plot = XYPlotCompBathym(save_plot_per_iteration=True, plot_initial=False, memory=0, X=X_utm, Y=Y_utm, Z=Z, Sx=Sub_x, Sy=Sub_y, cables=cables_plot, metrics_recorder=metrics_recorder, Xn=xn, Yn=yn, b=boundplot, opt_nr=1, folder=plot_folder, sampling=sample, obj=obj, optimize=False, iter_nr = i)
             inputs = {}
@@ -629,7 +630,7 @@ if Mode == 'cooperative':
             pickle.dump({"metrics_recorder": metrics_recorder}, file)
     
     # Plot LCOE iterations
-    plot_convergence(mr=metrics_recorder,item='lcoe',plotstr='LCOE (€/MWh)',obj=0,overall=1,optfat=0)
+    plot_convergence(mr=metrics_recorder,item='lcoe',plotstr='LCOE (€/MWh)',obj=0,overall=1,optfat=0,feas=1)
 
 #%% Competitive design
 elif Mode == 'competitive':
@@ -752,7 +753,7 @@ elif Mode == 'competitive':
             pickle.dump({"metrics_recorder": metrics_recorder}, file)
             
     # Plot LCOE iterations
-    plot_convergence(mr=metrics_recorder,item='lcoe',plotstr='LCOE (€/MWh)',obj=0,overall=1,optfat=1)
+    plot_convergence(mr=metrics_recorder,item='lcoe',plotstr='LCOE (€/MWh)',obj=0,overall=1,optfat=1,feas=1)
 
 #%% Manually start postprocessing
 elif Mode == 'evaluate_multiter':
