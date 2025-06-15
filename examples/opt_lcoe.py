@@ -443,8 +443,8 @@ def plot_convergence(mr=None,item=None,plotstr=None,obj=1,overall=0,optfat=0,fea
             ax2.plot(np.array(mr['iteration']), [(-x / len(mr['x_final'][0])) if x is not None else np.nan for x in mr['tur_dist_violation']], 'r:', linewidth = 1, label='Spacing constraint')
             ax2.plot(np.array(mr['iteration']), [(-x / len(mr['x_final'][0])) if x is not None else np.nan for x in mr['bound_violation']], 'b:', linewidth = 1, label='Boundary constraint')
         else:
-            ax2.plot(np.array(mr['iteration']), [(x / len(mr['y_' + cz[0]][i])) if x is not None else np.nan for i, (x, cz) in enumerate(zip(mr['tur_dist_violation'], mr['cur_zone']))], 'r:', linewidth = 1, label='Spacing constraint')
-            ax2.plot(np.array(mr['iteration']), [(x / len(mr['y_' + cz[0]][i])) if x is not None else np.nan for i, (x, cz) in enumerate(zip(mr['bound_violation'], mr['cur_zone']))], 'b:', linewidth = 1, label='Boundary constraint')
+            ax2.plot(np.array(mr['iteration']), [(-x / len(mr['y_' + cz[0]][i])) if x is not None else np.nan for i, (x, cz) in enumerate(zip(mr['tur_dist_violation'], mr['cur_zone']))], 'r:', linewidth = 1, label='Spacing constraint')
+            ax2.plot(np.array(mr['iteration']), [(-x / len(mr['y_' + cz[0]][i])) if x is not None else np.nan for i, (x, cz) in enumerate(zip(mr['bound_violation'], mr['cur_zone']))], 'b:', linewidth = 1, label='Boundary constraint')
         ax2.set_ylabel('Constraint violation [m/turbine]')
         ax2.tick_params(axis='x', labelsize=FS - 1)
         ax2.tick_params(axis='y', labelsize=FS - 1)
@@ -655,7 +655,7 @@ elif Mode == 'competitive':
     # go through each zone as specified in Sequenc
     for i in loop_range:
         now = datetime.now()
-        print('Evaluate zone ' + str(i) + '/' + str(len(Sequence)) + '. Time: ' + now.strftime("%H:%M:%S"))
+        print('Evaluate zone ' + str(i+1) + '/' + str(len(Sequence)) + '. Time: ' + now.strftime("%H:%M:%S"))
         opt_nr = i+1
         curzone = Sequence[i]
         # Initial Layout
