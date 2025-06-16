@@ -541,7 +541,7 @@ def postprocess_recorder(data):
         metrics_recorder['bound_violation'].append(data['bound_violation'][idx])
         if opt_nr_check != opt_nr:
             # update setting only for new zone
-            metrics_recorder['settings'].append(data['settings'][opt_nr])
+            metrics_recorder['settings'].append(data['settings'][opt_nr_check])
             opt_nr_check = opt_nr
         #
         # run
