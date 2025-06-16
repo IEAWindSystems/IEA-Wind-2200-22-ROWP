@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import topfarm
 from matplotlib.ticker import FuncFormatter
+from matplotlib.patches import Circle, Polygon
 
 def mypause(interval):
     # pause without show
@@ -177,29 +178,57 @@ class XYPlotCompBathym(ExplicitComponent):
             self.ax.plot([], [], '>k', markerfacecolor="#00000000", markeredgecolor='k', label='Initial position')
 
     def plot_current_position(self, x, y):
-        if self.paper:
-            self.ax.scatter(x, y, c='darkorange', marker='2', zorder=3, linewidth=1.5, label='Turbine')
-        else:
-            for c, x_, y_ in zip(self.colors, x, y):
-                self.ax.plot(x_, y_, 'o', color=c, ms=5)
-                self.ax.plot(x_, y_, 'xk', ms=4)
-            self.ax.plot([], [], 'xk', label='Current position')
+        # if self.paper:
+        self.ax.scatter(x, y, facecolors='darkorange', edgecolors='black', marker='^', s=25, zorder=3, linewidth=0.5, label='Turbine')
+        # else:
+            # for c, x_, y_ in zip(self.colors, x, y):
+            #     self.ax.plot(x_, y_, 'o', color=c, ms=5)
+            #     self.ax.plot(x_, y_, 'xk', ms=4)
+            # self.ax.plot([], [], 'xk', label='Current position')
+            
+    def plot_tur_spacing(self, x, y):
+        for i, (x, y) in enumerate(zip(x, y)):
+            circle = Circle((x, y), self.metrics_recorder['settings'][0]['d_RD']*283.2181/2,
+                            facecolor=(255/255, 140/255, 0/255, 0.45), # darkorange with alpha = 0.3
+                            edgecolor='darkorange',
+                            linewidth=0.7,
+                            label='Spacing constraint' if i == 0 else None)
+            self.ax.add_patch(circle)
+            
+    def plot_nb_spacing(self, x, y):
+        for x, y in zip(x,y):
+            circle = Circle((x, y), self.metrics_recorder['settings'][0]['d_RD']*283.2181/2,
+                            facecolor=(255/255, 140/255, 0/255, 0.45), # darkorange with alpha = 0.3
+                            edgecolor='darkorange',
+                            linewidth=0.7)
+            self.ax.add_patch(circle)
         
     def plot_nb_position(self, x, y):
-        if self.paper:
-            self.ax.scatter(x, y, c='darkorange', marker='2', zorder=3, linewidth=1.5)
-        else:
-            for c, x_, y_ in zip(self.colors, x, y):
-                self.ax.plot(x_, y_, 'o', color=c, ms=5)
-                self.ax.plot(x_, y_, 'xk', ms=4)
+        # if self.paper:
+        self.ax.scatter(x, y, facecolors='darkorange', edgecolors='black', marker='^', s=25, zorder=3, linewidth=0.5)
+        # else:
+        #     for c, x_, y_ in zip(self.colors, x, y):
+        #         self.ax.plot(x_, y_, 'o', color=c, ms=5)
+        #         self.ax.plot(x_, y_, 'xk', ms=4)
         
     def plot_boundaries(self):
+        wf = {
+            "north": 0,
+            "mid": 1,
+            "south": 2,
+            "all": 5
+        }
+        i_opt = wf[self.metrics_recorder['cur_zone'][-1][0]]
+        
         b = self.b
         for i in range(len(b)):
             bx = b[i][:,0]
             by = b[i][:,1]
             bx = np.append(bx,bx[0])
             by = np.append(by,by[0])
+            if i == i_opt:
+                polygon = Polygon(np.c_[bx, by], closed=True, facecolor='blueviolet', edgecolor='none', alpha=0.17)
+                self.ax.add_patch(polygon)
             if i == 0:
                 self.ax.plot(bx,by,color='k',linewidth=0.5,label='Boundary')
             else:
@@ -236,7 +265,7 @@ class XYPlotCompBathym(ExplicitComponent):
     
     def set_title(self):
         # Overall optimization
-        if self.opt_nr:
+        if self.optimize:
             title = "\nIteration: %d"  % (self.metrics_recorder['iteration'][-1]-1)
         else:
             title = 'Final results'
@@ -291,18 +320,21 @@ class XYPlotCompBathym(ExplicitComponent):
             
             if len(self.b) > 0:
                 self.plot_boundaries()
-            
-            if self.optimize:
-                self.plot_constraints()
-
+                
             x = inputs['x']
             y = inputs['y']
+                
+            if self.optimize:
+                self.plot_constraints()
+            else:
+                self.plot_tur_spacing(x, y)
 
             self.plot_cables(x,y)
             self.plot_substations()
             self.plot_current_position(x, y)
             if len(self.Xn) > 0:
                 self.plot_nb_position(self.Xn,self.Yn)
+                self.plot_nb_spacing(self.Xn,self.Yn)
             
             if not self.paper:
                 self.set_title()
@@ -318,8 +350,10 @@ class XYPlotCompBathym(ExplicitComponent):
             plt.gca().yaxis.set_major_formatter(FuncFormatter(meters_to_kilometers))
             self.ax.set_ylabel('Northing [km]',fontsize=9)
             self.ax.set_xlabel('Easting [km]',fontsize=9)
-            self.ax.set_xlim([534700,561000])
-            self.ax.set_ylim([5813500,5852500])
+            self.ax.set_xlim([533200,562500])
+            self.ax.set_ylim([5813300,5852700])
+            # self.ax.set_xlim([525700,567000])
+            # self.ax.set_ylim([5804500,5862500])
             
             plt.gcf().tight_layout()
                      

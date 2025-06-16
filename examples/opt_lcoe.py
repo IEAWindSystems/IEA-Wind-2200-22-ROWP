@@ -236,9 +236,6 @@ yn = []
 x_if = [] # infeasible cabling layouts
 y_if = []
 cable_cost_n = [0,0]
-cable_u_n = [[],[]]
-cable_v_n = [[],[]]
-cable_type_n = [[],[]]
 mp_cost_n = [0,0]
 SepCabling = False
 opt_nr = 1
@@ -491,12 +488,16 @@ def postprocess_recorder(data):
         new_indices.extend(step_indices)
     new_indices.append(eva_indices[-1])  # Add the final value
     eva_indices = new_indices
-    
+    opt_nr_check = 0 # helper to see when swapping sequence
     # go through each required index and add results to metrics_recorder.
     for i, idx in enumerate(eva_indices):
         print('evaluate case ' + str(i+1) + '/' + str(len(eva_indices)))
         nb = data['neighbours'][idx]
         curzone = data['cur_zone'][idx][0]
+        xn = []
+        yn = []
+        cable_cost_n = [0,0]
+        mp_cost_n = [0,0]
         if curzone == 'all':
             # cooperative
             x0 = np.array([])
@@ -529,6 +530,8 @@ def postprocess_recorder(data):
                 yn = np.concatenate([yn, data['y_' + zone][idx]])
                 cable_cost_n[j] = data['cable_cost_' + zone][idx]
                 mp_cost_n[j]= data['mp_cost_' + zone][idx]
+        else:
+            nf = False
 
         boundplot = list(boundaries.values())
         plot_folder = "Figures_processed_" + File
@@ -536,7 +539,10 @@ def postprocess_recorder(data):
         metrics_recorder['sgd_constraint_violation'].append(data['sgd_constraint_violation'][idx])
         metrics_recorder['tur_dist_violation'].append(data['tur_dist_violation'][idx])
         metrics_recorder['bound_violation'].append(data['bound_violation'][idx])
-        
+        if opt_nr_check != opt_nr:
+            # update setting only for new zone
+            metrics_recorder['settings'].append(data['settings'][opt_nr])
+            opt_nr_check = opt_nr
         #
         # run
         lcoe_func(x0,y0)
@@ -550,7 +556,6 @@ def postprocess_recorder(data):
             plot.compute(inputs,[])
             plt.close()
     metrics_recorder['iteration'] = eva_indices
-    metrics_recorder['settings'] = data['settings']
     metrics_recorder['x_final'] = data['x_final']
     metrics_recorder['y_final'] = data['y_final']
     return metrics_recorder
@@ -781,8 +786,8 @@ elif Mode == 'evaluate_recorder':
         xn = []
         yn = []
         for zone in nb:
-            xn = np.concatenate([xn, data['x_' + zone][-1]])
-            yn = np.concatenate([yn, data['y_' + zone][-1]])
+            xn = np.concatenate([xn, metrics_recorder['x_' + zone][-1]])
+            yn = np.concatenate([yn, metrics_recorder['y_' + zone][-1]])
         plt.figure()
         
         import matplotlib.font_manager as font_manager
@@ -791,7 +796,7 @@ elif Mode == 'evaluate_recorder':
             font_manager.fontManager.addfont(font)
         plt.rcParams["font.family"] = "Serif"
             
-        plot = XYPlotCompBathym(save_plot_per_iteration=True, plot_initial=True, memory=0, X=X_utm, Y=Y_utm, Z=Z, Sx=Sub_x, Sy=Sub_y, cables=cables_plot, metrics_recorder=metrics_recorder, Xn=xn, Yn=yn, b=boundplot, opt_nr=opt_nr, folder=plot_folder, sampling=sample, obj=obj, optimize=False, paper=False)
+        plot = XYPlotCompBathym(save_plot_per_iteration=True, plot_initial=True, memory=0, X=X_utm, Y=Y_utm, Z=Z, Sx=Sub_x, Sy=Sub_y, cables=cables_plot, metrics_recorder=metrics_recorder, Xn=xn, Yn=yn, b=boundplot, opt_nr=opt_nr, folder=plot_folder, sampling=sample, obj=obj, optimize=False, paper=True)
         inputs = {}
         curzone = metrics_recorder['cur_zone'][-1][-1]
         if curzone == 'all':
@@ -800,13 +805,13 @@ elif Mode == 'evaluate_recorder':
             y0 = np.array([])
             Sequence = list(dict.fromkeys(metrics_recorder['sequence']))
             for zone in Sequence:
-                x0 = np.concatenate([x0,data['x_' + zone][-1]])
-                y0 = np.concatenate([y0,data['y_' + zone][-1]])
+                x0 = np.concatenate([x0,metrics_recorder['x_' + zone][-1]])
+                y0 = np.concatenate([y0,metrics_recorder['y_' + zone][-1]])
             inputs['x'] = x0
             inputs['y'] = y0
         else:
-            inputs['x'] = np.array(np.array(data['x_' + curzone][-1]))
-            inputs['y'] = np.array(np.array(data['y_' + curzone][-1]))
+            inputs['x'] = np.array(np.array(metrics_recorder['x_' + curzone][-1]))
+            inputs['y'] = np.array(np.array(metrics_recorder['y_' + curzone][-1]))
         plot.compute(inputs,[])
         
         plt.gcf().subplots_adjust(
@@ -823,7 +828,7 @@ elif Mode == 'evaluate_recorder':
         # plt.text(543000, 5823000, 'S', color='white', fontsize=22, ha='center', va='center')
         # plt.gcf().savefig("Bathymetry.pdf", pad_inches=0, dpi=500)
         
-    plot_convergence(mr=metrics_recorder,item='lcoe',plotstr='LCOE (€/MWh)',obj=0,overall=1,optfat=0,feas=1)
+    plot_convergence(mr=metrics_recorder,item='lcoe',plotstr='LCOE (€/MWh)',obj=0,overall=0,optfat=1,feas=1)
     # plot_convergence(mr=metrics_recorder,item='aep',plotstr='AEP (GWh)',obj=0,overall=0,optfat=1)
     # plot_convergence(mr=metrics_recorder,item='cable_cost',plotstr='Cable Cost (€)',obj=0,overall=0,optfat=1)
     # plot_convergence(mr=metrics_recorder,item='mp_cost',plotstr='Monopile Cost (€)',obj=0,overall=0,optfat=1)
