@@ -28,14 +28,14 @@ from optiwindnet.api import WindFarmNetwork, ModelOptions, MILP, MetaHeuristic
 from shapely.geometry import Point, Polygon
 from topfarm.constraint_components.boundary import MultiWFBoundaryConstraint, BoundaryType
 from RecordFunc import create_recorder, record_cable_metrics, record_main_metrics_multisub, record_main_metrics_singlesub, record_results_constraints
-seed = 2
+seed = 4
 np.random.seed(seed)
 #
 #%% INPUTS
 # General inputs
-Mode = 'competitive'                    # 'cooperative' or 'competitive' or 'evaluate_recorder' or 'evaluate_multiter' or 'CompareCabling'
-File = 'res_cop_8D_S2_processed'
-Sequence = ['north','mid','south']*5    # define sequence of zones for sequential design
+Mode = 'cooperative'                    # 'cooperative' or 'competitive' or 'evaluate_recorder' or 'evaluate_multiter' or 'CompareCabling'
+File = 'res_coop_6D_S4_processed'
+Sequence = ['north','mid','south']*4    # define sequence of zones for sequential design
 CableSolver = 'MetaHeuristic'           # 'Heuristic', 'MetaHeuristic', 'MILP_cplex' or 'MILP_ortools'
 Continue = False                        # set to True if you give foregoing metrics_recorder to continue optimization
 Model = 'turbopark'                     # 'jensen', 'gauss' or 'turbopark'
@@ -44,8 +44,8 @@ obj = 'lcoe'                            # 'lcoe' or 'aep'
 plot_iter = False                       # True or False: plot and store layouts during optimization each plot_each iterations
 plot_postpro = True                     # True or False: plot and store layouts during postprocessing (how often is linked to step)
 plot_each = 1                           # define in which interval a plot should be made
-d_RD = 8                                # min spacing distance in rotor diameters
-step = 20                               # at each "step" iterations, the full wind rose is recalculated in postprocessing (when sampling is used during opt)
+d_RD = 6                                # min spacing distance in rotor diameters
+step = 10                               # at each "step" iterations, the full wind rose is recalculated in postprocessing (when sampling is used during opt)
 
 # SGD
 maxiter = 5000
@@ -416,57 +416,61 @@ min_spacing_m = d_RD * windTurbines.diameter()  #minimum inter-turbine spacing i
 metrics_recorder = create_recorder(Sequence)
 
 #%% Convergence plotting script
-def plot_convergence(mr=None,item=None,plotstr=None,obj=1,overall=0,optfat=0,feas=0):
+def plot_convergence(mr=None,item=None,plotstr=None,obj=1,overall=0,optfat=0,feas=0,reg=1):
     FS = 9
-    fig, ax = plt.subplots(figsize=(5, 3))
-    ax.plot(np.array(mr['iteration']),[x if x!=0 else np.nan for x in mr[item+'_north']], label='North', linewidth = 1)
-    ax.plot(np.array(mr['iteration']),[x if x!=0 else np.nan for x in mr[item+'_mid']], label='Mid', linewidth = 1)
-    ax.plot(np.array(mr['iteration']),[x if x!=0 else np.nan for x in mr[item+'_south']], label='South', linewidth = 1)
+    LW = 1.3
+    LW2 = 0.5
+    fig, ax = plt.subplots(figsize=(6.5, 4))
+    ax.plot(np.array(mr['iteration']),[x if x!=0 else np.nan for x in mr[item+'_north']], label='North', linewidth = LW, zorder=2)
+    ax.plot(np.array(mr['iteration']),[x if x!=0 else np.nan for x in mr[item+'_mid']], label='Mid', linewidth = LW, zorder=2)
+    ax.plot(np.array(mr['iteration']),[x if x!=0 else np.nan for x in mr[item+'_south']], label='South', linewidth = LW, zorder=2)
     if obj:
-        ax.plot(np.array(mr['iteration']),[x if x!=0 else np.nan for x in mr[item]], label='Overall', linewidth = 1)
+        ax.plot(np.array(mr['iteration']),[x if x!=0 else np.nan for x in mr[item]], label='Overall', linewidth = LW)
     if overall:
-        ax.plot(np.array(mr['iteration']),[x if x!=0 else np.nan for x in mr[item+'_all']], label='Overall', linewidth = 1)
+        ax.plot(np.array(mr['iteration']),[x if x!=0 else np.nan for x in mr[item+'_all']], label='Overall', linewidth = LW, zorder=1)
     if optfat:
         for i in range(0,len(mr['lcoe_all'])-1):
-            if i == 0:
-                leg = 'Current objective'
-            else:
-                leg = None
             if mr['opt_nr'][i] == mr['opt_nr'][i+1]:
                 ax.plot(np.array(mr['iteration'][i:i+2]),
-                    np.array(mr[item+'_'+mr['cur_zone'][i][0]][i:i+2]), linestyle="--", linewidth = 0.8, color="black", label=leg)
+                    np.array(mr[item+'_'+mr['cur_zone'][i][0]][i:i+2]), linestyle=":", linewidth = LW-0.2, color="black", label='Current objective' if i == 0 else "")
+    if reg:
+        vertical_lines = [mr['iteration'][i] for i in range(1, len(mr['opt_nr'])) if mr['opt_nr'][i] > mr['opt_nr'][i-1]]  # Find indices where opt_nr increases
+        for x in vertical_lines:
+            plt.axvline(x=x, linestyle=(0, (1, 3)), color='purple', label='New zone' if x == vertical_lines[0] else "", linewidth = 0.75)
     if feas:
         ax2 = ax.twinx()
         if mr['cur_zone'][0][0] == 'all':
-            ax2.plot(np.array(mr['iteration']), [(-x / len(mr['x_final'][0])) if x is not None else np.nan for x in mr['tur_dist_violation']], 'r:', linewidth = 1, label='Spacing constraint')
-            ax2.plot(np.array(mr['iteration']), [(-x / len(mr['x_final'][0])) if x is not None else np.nan for x in mr['bound_violation']], 'b:', linewidth = 1, label='Boundary constraint')
+            ax2.plot(np.array(mr['iteration']), [(-x / len(mr['x_final'][0])) if x is not None else np.nan for x in mr['tur_dist_violation']], 'r:', linewidth = LW2, label='Spacing constraint')
+            ax2.plot(np.array(mr['iteration']), [(-x / len(mr['x_final'][0])) if x is not None else np.nan for x in mr['bound_violation']], 'b:', linewidth = LW2, label='Boundary constraint')
         else:
-            ax2.plot(np.array(mr['iteration']), [(-x / len(mr['y_' + cz[0]][i])) if x is not None else np.nan for i, (x, cz) in enumerate(zip(mr['tur_dist_violation'], mr['cur_zone']))], 'r:', linewidth = 1, label='Spacing constraint')
-            ax2.plot(np.array(mr['iteration']), [(-x / len(mr['y_' + cz[0]][i])) if x is not None else np.nan for i, (x, cz) in enumerate(zip(mr['bound_violation'], mr['cur_zone']))], 'b:', linewidth = 1, label='Boundary constraint')
+            ax2.plot(np.array(mr['iteration']), [(-x / len(mr['y_' + cz[0]][i])) if x is not None else np.nan for i, (x, cz) in enumerate(zip(mr['tur_dist_violation'], mr['cur_zone']))], 'r--', linewidth = LW2, label='Spacing constraint')
+            ax2.plot(np.array(mr['iteration']), [(-x / len(mr['y_' + cz[0]][i])) if x is not None else np.nan for i, (x, cz) in enumerate(zip(mr['bound_violation'], mr['cur_zone']))], 'b--', linewidth = LW2, label='Boundary constraint')
         ax2.set_ylabel('Constraint violation [m/turbine]')
         ax2.tick_params(axis='x', labelsize=FS - 1)
         ax2.tick_params(axis='y', labelsize=FS - 1)
+        if ax2_ystep: ax2.set_yticks(range(0, 41, ax2_ystep))
         # ax2.set_yscale('log')
         # legend
         line1, label1 = ax.get_legend_handles_labels()
         line2, label2 = ax2.get_legend_handles_labels()
-        ax.legend(line1 + line2, label1 + label2, fontsize=FS)
+        ax.legend(line1 + line2, label1 + label2, fontsize=FS,ncol=2)
+        if ylim2: ax2.set_ylim(ylim2)
     else:
         ax.legend(fontsize=FS)
     # decorate
     ax.grid(True)
     ax.set_xlabel('Iteration', fontsize=FS)
     ax.set_ylabel(plotstr, fontsize=FS)
-    ax.set_title(plotstr, fontsize=FS + 2)
+    # ax.set_title(plotstr, fontsize=FS + 2)
     ax.tick_params(axis='x', labelsize=FS - 1)
     ax.tick_params(axis='y', labelsize=FS - 1)
     fig.tight_layout()
-    ax.set_xlim([0,max(mr['iteration'])])
+    if xlim:
+        ax.set_xlim(xlim)
+    else:
+        ax.set_xlim([0,max(mr['iteration'])])
+    if ylim: ax.set_ylim(ylim)
     
-    # ax.set_ylim([87.7, 95])
-    # ax2.set_ylim([-0.3,7])
-    
-
 #%% Postprocessing script for full wind rose
 def postprocess_recorder(data):
     global metrics_recorder, nb, curzone, Sequence, SepCabling, Sx, Sy, nnb, sample, opt_nr, xn, yn, nf, cable_cost_n, mp_cost_n
@@ -549,7 +553,7 @@ def postprocess_recorder(data):
         # plot
         if plot_postpro:
             plt.figure()
-            plot = XYPlotCompBathym(save_plot_per_iteration=True, plot_initial=False, memory=0, X=X_utm, Y=Y_utm, Z=Z, Sx=Sub_x, Sy=Sub_y, cables=cables_plot, metrics_recorder=metrics_recorder, Xn=xn, Yn=yn, b=boundplot, opt_nr=1, folder=plot_folder, sampling=sample, obj=obj, optimize=False, iter_nr = i)
+            plot = XYPlotCompBathym(save_plot_per_iteration=True, plot_initial=False, memory=0, X=X_utm, Y=Y_utm, Z=Z, Sx=Sub_x, Sy=Sub_y, cables=cables_plot, metrics_recorder=metrics_recorder, Xn=xn, Yn=yn, b=boundplot, opt_nr=1, folder=plot_folder, sampling=sample, obj=obj, optimize=False, iter_nr=i, paper=True)
             inputs = {}
             inputs['x'] = np.array(x0)
             inputs['y'] = np.array(y0)
@@ -828,7 +832,7 @@ elif Mode == 'evaluate_recorder':
         # plt.text(543000, 5823000, 'S', color='white', fontsize=22, ha='center', va='center')
         # plt.gcf().savefig("Bathymetry.pdf", pad_inches=0, dpi=500)
         
-    plot_convergence(mr=metrics_recorder,item='lcoe',plotstr='LCOE (€/MWh)',obj=0,overall=0,optfat=1,feas=1)
+    plot_convergence(mr=metrics_recorder,item='lcoe',plotstr='LCOE (€/MWh)',obj=0,overall=1,optfat=0,feas=0)
     # plot_convergence(mr=metrics_recorder,item='aep',plotstr='AEP (GWh)',obj=0,overall=0,optfat=1)
     # plot_convergence(mr=metrics_recorder,item='cable_cost',plotstr='Cable Cost (€)',obj=0,overall=0,optfat=1)
     # plot_convergence(mr=metrics_recorder,item='mp_cost',plotstr='Monopile Cost (€)',obj=0,overall=0,optfat=1)

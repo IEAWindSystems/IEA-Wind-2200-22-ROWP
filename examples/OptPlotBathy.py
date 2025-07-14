@@ -140,7 +140,7 @@ class XYPlotCompBathym(ExplicitComponent):
             cb = fig.colorbar(CS)
             cb.set_label('Depth [m]',fontsize=8)
             cb.ax.invert_yaxis()
-            cb.set_ticks(np.arange(21,35,2))
+            cb.set_ticks(np.arange(21,36,2))
             cb.ax.tick_params(labelsize=7)
 
 #     def plot_boundary(self):
@@ -189,7 +189,7 @@ class XYPlotCompBathym(ExplicitComponent):
     def plot_tur_spacing(self, x, y):
         for i, (x, y) in enumerate(zip(x, y)):
             circle = Circle((x, y), self.metrics_recorder['settings'][0]['d_RD']*283.2181/2,
-                            facecolor=(255/255, 140/255, 0/255, 0.45), # darkorange with alpha = 0.3
+                            facecolor=(255/255, 140/255, 0/255, 0.3), # darkorange with alpha = 0.3
                             edgecolor='darkorange',
                             linewidth=0.7,
                             label='Spacing constraint' if i == 0 else None)
@@ -198,7 +198,7 @@ class XYPlotCompBathym(ExplicitComponent):
     def plot_nb_spacing(self, x, y):
         for x, y in zip(x,y):
             circle = Circle((x, y), self.metrics_recorder['settings'][0]['d_RD']*283.2181/2,
-                            facecolor=(255/255, 140/255, 0/255, 0.45), # darkorange with alpha = 0.3
+                            facecolor=(255/255, 140/255, 0/255, 0.3), # darkorange with alpha = 0.3
                             edgecolor='darkorange',
                             linewidth=0.7)
             self.ax.add_patch(circle)
@@ -268,25 +268,27 @@ class XYPlotCompBathym(ExplicitComponent):
         if self.optimize:
             title = "\nIteration: %d"  % (self.metrics_recorder['iteration'][-1]-1)
         else:
-            title = 'Final results'
+            title = ''
         # Plot lcoe if no sampling
         if not self.sampling and self.obj:
             if self.obj == 'lcoe':
                 unit = '$/MWh'
                 divider = 1
+                obj = 'LCOE'
             else:
                 unit = 'GWh'
                 divider = 1000
+                obj = 'AEP'
             # For sequential layout, add overall LCOE
-            title += "\n" + "Overall " + self.obj + " = %.2f %s (%+.2f%%)" % (self.metrics_recorder[self.obj + '_all'][-1] / divider, unit, (self.metrics_recorder[self.obj + '_all'][-1] - self.metrics_recorder[self.obj + '_all'][0]) / self.metrics_recorder[self.obj + '_all'][0] * 100)
+            title += "Overall " + obj + " = %.2f %s (%+.2f%%)" % (self.metrics_recorder[self.obj + '_all'][-1] / divider, unit, (self.metrics_recorder[self.obj + '_all'][-1] - self.metrics_recorder[self.obj + '_all'][0]) / self.metrics_recorder[self.obj + '_all'][0] * 100)
             #
             items = ['north','mid','south']
             for idx, zone in enumerate(items):
                 if self.metrics_recorder[self.obj + '_' + zone][-1] != 0:
-                    title += " \n" + self.obj + ' ' + zone + " = %.2f %s (%+.2f%%)" % (self.metrics_recorder[self.obj + '_' + zone][-1] / divider, unit, (self.metrics_recorder[self.obj + '_' + zone][-1] - self.metrics_recorder[self.obj + '_' + zone][next(i for i, value in enumerate(self.metrics_recorder[self.obj + '_' + zone]) if value != 0)]) / (self.metrics_recorder[self.obj + '_' + zone][next(i for i, value in enumerate(self.metrics_recorder[self.obj + '_' + zone]) if value != 0)]) * 100)
+                    title += " \n" + obj + ' ' + zone + " = %.2f %s (%+.2f%%)" % (self.metrics_recorder[self.obj + '_' + zone][-1] / divider, unit, (self.metrics_recorder[self.obj + '_' + zone][-1] - self.metrics_recorder[self.obj + '_' + zone][next(i for i, value in enumerate(self.metrics_recorder[self.obj + '_' + zone]) if value != 0)]) / (self.metrics_recorder[self.obj + '_' + zone][next(i for i, value in enumerate(self.metrics_recorder[self.obj + '_' + zone]) if value != 0)]) * 100)
                 else:
-                    title += " \n" + self.obj + " " + zone + " = - " + unit + " (-%)"
-        self.ax.set_title(title,fontsize=9)
+                    title += " \n" + obj + " " + zone + " = - " + unit + " (-%)"
+        self.ax.set_title(title,fontsize=8)
         
     def get_initial(self):
         rec = self.problem.recorder
@@ -336,8 +338,7 @@ class XYPlotCompBathym(ExplicitComponent):
                 self.plot_nb_position(self.Xn,self.Yn)
                 self.plot_nb_spacing(self.Xn,self.Yn)
             
-            if not self.paper:
-                self.set_title()
+            self.set_title()
             self.ax.legend(loc='upper left',fontsize=7)
             
             self.ax.grid(alpha=0.6)
@@ -356,6 +357,16 @@ class XYPlotCompBathym(ExplicitComponent):
             # self.ax.set_ylim([5804500,5862500])
             
             plt.gcf().tight_layout()
+            
+            if self.paper:
+                plt.gcf().subplots_adjust(
+                    top=0.879,
+                    bottom=0.088,
+                    left=0.022,
+                    right=0.978,
+                    hspace=0.2,
+                    wspace=0.2
+                )
                      
             if self.counter == 0:
                 plt.pause(1e-6)
@@ -371,6 +382,6 @@ class XYPlotCompBathym(ExplicitComponent):
                 if not os.path.exists(self.folder):
                     os.makedirs(self.folder)
                 if self.opt_nr:
-                    plt.savefig(self.folder + '/iteration_z' + str(self.opt_nr) + '_%s.png' % self.counter)
+                    plt.savefig(self.folder + '/iteration_z' + str(self.opt_nr) + '_%s.png' % self.counter, dpi=200, pad_inches=0)
                 else:
                     plt.savefig(self.folder + '/iteration_%s.png' % self.counter)
