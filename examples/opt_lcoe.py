@@ -47,9 +47,15 @@ plot_each = 1                           # define in which interval a plot should
 d_RD = 6                                # min spacing distance in rotor diameters
 step = 10                               # at each "step" iterations, the full wind rose is recalculated in postprocessing (when sampling is used during opt)
 
+# plot lims
+xlim = None                             # specify xlim for convergence plot or put None
+ylim = None                             # specify ylim for axis1 (obj) for convergence plot or put None
+ylim2 = None                            # specify ylim for axis2 (penalty) for convergence plot or put None
+ax2_ystep = None                        # specify tick step for axis2 or put None
+
 # SGD
-maxiter = 5000
-sgd_thresh = 0.02
+maxiter = 5000                          # maximum nr of iterations for SGD opt
+sgd_thresh = 0.02                       # SGD threshold
 
 # Monopile optimization
 MP_ref = 1                              # reference turbine type for monopile mass scaling. 0 = 10MW, 1 = 15MW, 2 = 3.4MW
