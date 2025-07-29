@@ -427,9 +427,9 @@ def plot_convergence(mr=None,item=None,plotstr=None,obj=1,overall=0,optfat=0,fea
     LW = 1.3
     LW2 = 0.5
     fig, ax = plt.subplots(figsize=(6.5, 4))
-    ax.plot(np.array(mr['iteration']),[x if x!=0 else np.nan for x in mr[item+'_north']], label='North', linewidth = LW, zorder=2)
-    ax.plot(np.array(mr['iteration']),[x if x!=0 else np.nan for x in mr[item+'_mid']], label='Mid', linewidth = LW, zorder=2)
-    ax.plot(np.array(mr['iteration']),[x if x!=0 else np.nan for x in mr[item+'_south']], label='South', linewidth = LW, zorder=2)
+    zones = list(dict.fromkeys(Sequence))
+    for zone in zones:
+        ax.plot(np.array(mr['iteration']),[x if x!=0 else np.nan for x in mr[item+'_'+str(zone)]], label=str(zone), linewidth = LW, zorder=2)
     if obj:
         ax.plot(np.array(mr['iteration']),[x if x!=0 else np.nan for x in mr[item]], label='Overall', linewidth = LW)
     if overall:
