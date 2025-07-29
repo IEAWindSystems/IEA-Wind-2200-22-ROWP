@@ -610,7 +610,7 @@ if Mode == 'cooperative':
         maximize = True
     
     # record settings
-    metrics_recorder['settings'].append({'Mode':Mode,'CableSolver':CableSolver,'Model':Model,'seed:':seed,'d_RD':d_RD,'tur_nr':tur_nr,'maxiter':maxiter,'learning_rate':learning_rate,'sgd_thresh':sgd_thresh,'curzone':curzone,'obj':obj,'Sequence':Sequence,'x0':x0,'y0':y0,'sample':sample,'samps':samps,'SepCabling':SepCabling,'Sx':Sx,'Sy':Sy,'depths':depths,'masses':masses,'Routers':Routers}) 
+    metrics_recorder['settings'].append({'Mode':Mode,'CableSolver':CableSolver,'Model':Model,'seed:':seed,'d_RD':d_RD,'tur_nr':tur_nr,'maxiter':maxiter,'learning_rate':learning_rate,'sgd_thresh':sgd_thresh,'curzone':curzone,'obj':obj,'Sequence':Sequence,'x0':x0,'y0':y0,'sample':sample,'samps':samps,'SepCabling':SepCabling,'Sx':Sx,'Sy':Sy,'depths':depths,'masses':masses}) 
     [metrics_recorder[key].append(None) for key in ["sgd_constraint_violation", "tur_dist_violation", "bound_violation"]]   # first run: no optimization
     
     # Optimization setup
@@ -735,7 +735,7 @@ elif Mode == 'competitive':
         
         # record settings
         [metrics_recorder[key].append(None) for key in ["sgd_constraint_violation", "tur_dist_violation", "bound_violation"]]   # first run: no optimization
-        metrics_recorder['settings'].append({'Mode':Mode,'CableSolver':CableSolver,'Model':Model,'seed:':seed,'d_RD':d_RD,'tur_nr':tur_nr,'maxiter':maxiter,'learning_rate':learning_rate,'sgd_thresh':sgd_thresh,'curzone':curzone,'obj':obj,'Sequence':Sequence,'x0':x0,'y0':y0,'sample':sample,'samps':samps,'SepCabling':SepCabling,'Sx':Sx,'Sy':Sy,'depths':depths,'masses':masses,'Routers':Routers}) 
+        metrics_recorder['settings'].append({'Mode':Mode,'CableSolver':CableSolver,'Model':Model,'seed:':seed,'d_RD':d_RD,'tur_nr':tur_nr,'maxiter':maxiter,'learning_rate':learning_rate,'sgd_thresh':sgd_thresh,'curzone':curzone,'obj':obj,'Sequence':Sequence,'x0':x0,'y0':y0,'sample':sample,'samps':samps,'SepCabling':SepCabling,'Sx':Sx,'Sy':Sy,'depths':depths,'masses':masses}) 
         
         # Optimization Setup
         tf = TopFarmProblem(
