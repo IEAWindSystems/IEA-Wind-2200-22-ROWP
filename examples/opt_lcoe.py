@@ -1,10 +1,11 @@
+import os
+os.environ["OPENMDAO_WORKDIR"] = os.path.join(os.path.dirname(__file__), ".openmdao_out")
 import numpy as np
 import pandas as pd
 from py_wake.rotor_avg_models import RotorCenter
 import time
 import matplotlib.pyplot as plt
 import xarray as xr
-import os
 import utm
 import pickle
 from datetime import datetime
@@ -234,6 +235,13 @@ Routers = {'Heuristic': None,
 cables = np.array([[c["capacity_NrT"], c["cost_€_m"]] for c in cable_specs])
 cables_plot = np.array([[c["diameter_mm2"], c["capacity_NrT"], c["cost_€_m"]] for c in cable_specs])
 
+# results and figure folders
+os.makedirs("Results", exist_ok=True)
+os.makedirs("Figures", exist_ok=True)
+# create empty figure if plot_iter is on and optimization should run
+if plot_iter and (Mode == 'cooperative' or Mode == 'competitive'):
+    plt.figure()
+    
 # defaults
 # neighbour wind farm with turbine coordinates and costs to consider
 nf = False
@@ -544,7 +552,7 @@ def postprocess_recorder(data):
             nf = False
 
         boundplot = list(boundaries.values())
-        plot_folder = "Figures_processed_" + File
+        plot_folder = "Figures//Figures_processed_" + File
         opt_nr = data['opt_nr'][idx]
         metrics_recorder['sgd_constraint_violation'].append(data['sgd_constraint_violation'][idx])
         metrics_recorder['tur_dist_violation'].append(data['tur_dist_violation'][idx])
@@ -559,7 +567,7 @@ def postprocess_recorder(data):
         # plot
         if plot_postpro:
             plt.figure()
-            plot = XYPlotCompBathym(save_plot_per_iteration=True, plot_initial=False, memory=0, X=X_utm, Y=Y_utm, Z=Z, Sx=Sub_x, Sy=Sub_y, cables=cables_plot, metrics_recorder=metrics_recorder, Xn=xn, Yn=yn, b=boundplot, opt_nr=1, folder=plot_folder, sampling=sample, obj=obj, optimize=False, iter_nr=i, paper=True)
+            plot = XYPlotCompBathym(save_plot_per_iteration=True, plot_initial=False, memory=0, X=X_utm, Y=Y_utm, Z=Z, Sx=Sub_x, Sy=Sub_y, cables=cables_plot, metrics_recorder=metrics_recorder, Xn=xn, Yn=yn, b=boundplot, opt_nr=1, folder=plot_folder, sampling=sample, obj=obj, optimize=False, iter_nr=i, paper=False)
             inputs = {}
             inputs['x'] = np.array(x0)
             inputs['y'] = np.array(y0)
@@ -573,7 +581,7 @@ def postprocess_recorder(data):
 #%% Cooperative design
 if Mode == 'cooperative':
     Sequence = ['north','mid','south']
-    plot_folder = "Figures_cooperative_2D_6000it"
+    plot_folder = "Figures//Figures_cooperative"
     # Initital Layout
     x0 = np.concatenate([np.array(points[name])[:, 0] for name in wf])
     y0 = np.concatenate([np.array(points[name])[:, 1] for name in wf])
@@ -589,7 +597,6 @@ if Mode == 'cooperative':
     sample = True
     SepCabling = True       # Indicate if cabling is only allowed within each zone or cross-zonal
     boundplot = list(boundaries.values())
-    plot_folder = "Figures_cooperative_2D_10000it"
     Sx = Subs_x
     Sy = Subs_y
     nb = []
@@ -632,7 +639,7 @@ if Mode == 'cooperative':
     record_results_constraints(metrics_recorder, recorder, state, cost, min_spacing_m)
     
     # Save to a file
-    with open(File + ".pkl", "wb") as file:
+    with open("Results//" + File + ".pkl", "wb") as file:
         pickle.dump({"metrics_recorder": metrics_recorder, "state": state, "recorder": recorder.recorder2list()}, file)
         
     # Postprocess for full wind rose
@@ -641,7 +648,7 @@ if Mode == 'cooperative':
         print('Starting postprocessing...')
         metrics_recorder = postprocess_recorder(metrics_recorder)
         # Save processed file
-        with open(File + "_processed.pkl", "wb") as file:
+        with open("Results//" + File + "_processed.pkl", "wb") as file:
             pickle.dump({"metrics_recorder": metrics_recorder}, file)
     
     # Plot LCOE iterations
@@ -652,7 +659,7 @@ elif Mode == 'competitive':
     if Continue:
         print('---- !! Careful, starting from foregoing design !! ----')
         file = "metric_recorder_sequential_samelr_linint_nmsnmsnms"
-        with open("C:\\Software\\IEA-Wind-2200-22-ROWP\\examples\\" + file + ".pkl", "rb") as file:
+        with open("C:\\Software\\IEA-Wind-2200-22-ROWP\\examples\\Results\\" + file + ".pkl", "rb") as file:
             data = pickle.load(file)
         metrics_recorder = data['metrics_recorder']
         # Truncate each list
@@ -666,7 +673,7 @@ elif Mode == 'competitive':
     sample = True
     SepCabling = False
     boundplot = list(boundaries.values())
-    plot_folder = "Figures_" + ''.join([entry[0] for entry in Sequence])
+    plot_folder = "Figures//Figures_" + ''.join([entry[0] for entry in Sequence])
         
     # go through each zone as specified in Sequenc
     for i in loop_range:
@@ -755,7 +762,7 @@ elif Mode == 'competitive':
         record_results_constraints(metrics_recorder, recorder, state, cost, min_spacing_m)
         
         # Save recorder to file
-        with open(File + ".pkl", "wb") as file:
+        with open("Results//" + File + ".pkl", "wb") as file:
             pickle.dump({"metrics_recorder": metrics_recorder, "state": state, "recorder": recorder.recorder2list()}, file)
    
     # Postprocess for full wind rose
@@ -764,7 +771,7 @@ elif Mode == 'competitive':
         print('Starting postprocessing...')
         metrics_recorder = postprocess_recorder(metrics_recorder)
         # Save processed file
-        with open(File + "_processed.pkl", "wb") as file:
+        with open("Results//" + File + "_processed.pkl", "wb") as file:
             pickle.dump({"metrics_recorder": metrics_recorder}, file)
             
     # Plot LCOE iterations
@@ -772,7 +779,7 @@ elif Mode == 'competitive':
 
 #%% Manually start postprocessing
 elif Mode == 'evaluate_multiter':
-    with open("C:\\Software\\IEA-Wind-2200-22-ROWP\\examples\\" + File + ".pkl", "rb") as file:
+    with open("Results\\" + File + ".pkl", "rb") as file:
         data = pickle.load(file)
     data = data['metrics_recorder']
     metrics_recorder = postprocess_recorder(data)
@@ -786,11 +793,11 @@ elif Mode == 'evaluate_multiter':
     
 #%% Load metric_recorder and plot
 elif Mode == 'evaluate_recorder':
-    with open("C:\\Software\\IEA-Wind-2200-22-ROWP\\examples\\" + File + ".pkl", "rb") as file:
+    with open("Results\\" + File + ".pkl", "rb") as file:
         data = pickle.load(file)
     metrics_recorder = data['metrics_recorder']
     if plot_iter:
-        plot_folder = "FinalResult"
+        plot_folder = "Figures//FinalResult"
         boundplot = list(boundaries.values())
         nb = metrics_recorder['neighbours'][-1]
         xn = []
@@ -832,7 +839,8 @@ elif Mode == 'evaluate_recorder':
             hspace=0.2,
             wspace=0.2
         )
-        plt.gcf().savefig("Layout.pdf", dpi=500, pad_inches=0)
+        plt.gcf().savefig("Figures//FinalLayout.pdf", dpi=500, pad_inches=0)
+        
         # plt.text(555000, 5842000, 'N', color='white', fontsize=22, ha='center', va='center')
         # plt.text(548000, 5833000, 'M', color='white', fontsize=22, ha='center', va='center')
         # plt.text(543000, 5823000, 'S', color='white', fontsize=22, ha='center', va='center')
@@ -853,7 +861,7 @@ elif Mode == 'CompareCabling':
     for f, File in enumerate(Files):
     # File = "metric_recorder_cooperative_2D_6000it_processed"
         # specify file you want to load
-        with open("C:\\Software\\IEA-Wind-2200-22-ROWP\\examples\\" + File + ".pkl", "rb") as file:
+        with open("C:\\Software\\IEA-Wind-2200-22-ROWP\\examples\\Results\\" + File + ".pkl", "rb") as file:
             data = pickle.load(file)
         mr = data['metrics_recorder']
         item = 'lcoe'

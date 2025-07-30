@@ -111,11 +111,12 @@ class XYPlotCompBathym(ExplicitComponent):
     def init_plot(self, limits):
         self.ax.cla()
         fig = plt.gcf()
-        if self.paper:
-            fig.set_size_inches(6.97, 4.5)
-        else:
+        if self.optimize:
             fig.set_size_inches(10, 5)
             fig.tight_layout()
+        else:
+            fig.set_size_inches(6.97, 4.5)
+
         # self.ax.axis('equal')
 
         mi = limits.min(0)
@@ -359,7 +360,7 @@ class XYPlotCompBathym(ExplicitComponent):
             
             plt.gcf().tight_layout()
             
-            if self.paper:
+            if not self.optimize:
                 plt.gcf().subplots_adjust(
                     top=0.879,
                     bottom=0.088,
