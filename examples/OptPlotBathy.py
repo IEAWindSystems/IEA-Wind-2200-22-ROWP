@@ -111,11 +111,12 @@ class XYPlotCompBathym(ExplicitComponent):
     def init_plot(self, limits):
         self.ax.cla()
         fig = plt.gcf()
-        if self.paper:
-            fig.set_size_inches(6.97, 4.5)
-        else:
+        if self.optimize:
             fig.set_size_inches(10, 5)
             fig.tight_layout()
+        else:
+            fig.set_size_inches(6.97, 4.5)
+
         # self.ax.axis('equal')
 
         mi = limits.min(0)
@@ -283,6 +284,7 @@ class XYPlotCompBathym(ExplicitComponent):
             title += "Overall " + obj + " = %.2f %s (%+.2f%%)" % (self.metrics_recorder[self.obj + '_all'][-1] / divider, unit, (self.metrics_recorder[self.obj + '_all'][-1] - self.metrics_recorder[self.obj + '_all'][0]) / self.metrics_recorder[self.obj + '_all'][0] * 100)
             #
             items = ['north','mid','south']
+            items = [item for item in items if item in self.metrics_recorder['sequence']]
             for idx, zone in enumerate(items):
                 if self.metrics_recorder[self.obj + '_' + zone][-1] != 0:
                     title += " \n" + obj + ' ' + zone + " = %.2f %s (%+.2f%%)" % (self.metrics_recorder[self.obj + '_' + zone][-1] / divider, unit, (self.metrics_recorder[self.obj + '_' + zone][-1] - self.metrics_recorder[self.obj + '_' + zone][next(i for i, value in enumerate(self.metrics_recorder[self.obj + '_' + zone]) if value != 0)]) / (self.metrics_recorder[self.obj + '_' + zone][next(i for i, value in enumerate(self.metrics_recorder[self.obj + '_' + zone]) if value != 0)]) * 100)
@@ -358,7 +360,7 @@ class XYPlotCompBathym(ExplicitComponent):
             
             plt.gcf().tight_layout()
             
-            if self.paper:
+            if not self.optimize:
                 plt.gcf().subplots_adjust(
                     top=0.879,
                     bottom=0.088,
