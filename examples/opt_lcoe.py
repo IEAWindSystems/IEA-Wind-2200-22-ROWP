@@ -30,8 +30,6 @@ from optiwindnet.augmentation import poisson_disc_filler
 from shapely.geometry import Point, Polygon
 from topfarm.constraint_components.boundary import MultiWFBoundaryConstraint, BoundaryType
 from RecordFunc import create_recorder, record_cable_metrics, record_main_metrics_multisub, record_main_metrics_singlesub, record_results_constraints
-seed = 4
-np.random.seed(seed)
 #
 #%% INPUTS
 # General inputs
@@ -48,6 +46,7 @@ plot_postpro = True                     # True or False: plot and store layouts 
 plot_each = 1                           # define in which interval a plot should be made
 d_RD = 6                                # min spacing distance in rotor diameters
 step = 10                               # at each "step" iterations, the full wind rose is recalculated in postprocessing (when sampling is used during opt)
+seed = 2                                # random np seed for initial layout configuration
 
 # plot lims
 xlim = None                             # specify xlim for convergence plot or put None
@@ -400,7 +399,7 @@ def lcoe_jac(x, y, **kwargs):
 min_spacing_m = d_RD * windTurbines.diameter()  #minimum inter-turbine spacing in meters
 
 # Generate initial layouts for each wind farm
-coords = {name: poisson_disc_filler(tur_nr[wf[name]], min_dist=0.8*min_spacing_m, BorderC=boundaries[name])
+coords = {name: poisson_disc_filler(tur_nr[wf[name]], min_dist=0.8*min_spacing_m, BorderC=boundaries[name], seed=seed)
           for name in wf}
 
 #%% Recorder
