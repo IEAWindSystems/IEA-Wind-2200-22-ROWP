@@ -25,7 +25,7 @@ import windIO
 from pathlib import Path
 from scipy.interpolate import RegularGridInterpolator
 # from ssms.CalculateMass import CalculateMass
-from optiwindnet.api import WindFarmNetwork, ModelOptions, MILP, MetaHeuristic
+from optiwindnet.api import WindFarmNetwork, ModelOptions, MILP, MetaHeuristic, Heuristic
 from optiwindnet.augmentation import poisson_disc_filler
 from shapely.geometry import Point, Polygon
 from topfarm.constraint_components.boundary import MultiWFBoundaryConstraint, BoundaryType
@@ -226,12 +226,15 @@ samps = 100    #number of samples
 site.interp_method = 'linear'
 
 # Cable optimization
-CableSolvers = ['Heuristic', 'MetaHeuristic', 'MILP_ortools', 'MILP_cplex']         # Available solvers
+CableSolvers = ['MetaHeuristic', 'Heuristic', 'MILP_ortools', 'MILP_cplex']         # Available solvers in default order
 CableSolvers_order = [CableSolver] + [s for s in CableSolvers if s != CableSolver]  # Try primary solver first
-Routers = {'Heuristic': None,
-           'MetaHeuristic': MetaHeuristic(time_limit=0.3),
-           'MILP_cplex': MILP(solver_name='cplex', time_limit=5, mip_gap=0.005, verbose=False),
-           'MILP_ortools': MILP(solver_name='ortools', time_limit=5, mip_gap=0.005, verbose=False)}
+tl_metaheuristic = 0.3  # time limit
+tl_milp = 5
+mip_gap = 0.005
+Routers = {'Heuristic': Heuristic(),
+           'MetaHeuristic': MetaHeuristic(time_limit=tl_metaheuristic),
+           'MILP_cplex': MILP(solver_name='cplex', time_limit=tl_milp, mip_gap=mip_gap, verbose=False),
+           'MILP_ortools': MILP(solver_name='ortools', time_limit=tl_milp, mip_gap=mip_gap, verbose=False)}
 cables = np.array([[c["capacity_NrT"], c["cost_€_m"]] for c in cable_specs])
 cables_plot = np.array([[c["diameter_mm2"], c["capacity_NrT"], c["cost_€_m"]] for c in cable_specs])
 
@@ -591,7 +594,9 @@ if Mode == 'cooperative':
         maximize = True
     
     # record settings
-    metrics_recorder['settings'].append({'Mode':Mode,'CableSolver':CableSolver,'Model':Model,'seed:':seed,'d_RD':d_RD,'tur_nr':tur_nr,'maxiter':maxiter,'learning_rate':learning_rate,'sgd_thresh':sgd_thresh,'curzone':curzone,'obj':obj,'Sequence':Sequence,'x0':x0,'y0':y0,'sample':sample,'samps':samps,'SepCabling':SepCabling,'Sx':Sx,'Sy':Sy,'depths':depths,'masses':masses}) 
+    metrics_recorder['settings'].append({'Mode':Mode,'CableSolver':CableSolver,'Model':Model,'seed:':seed,'d_RD':d_RD,'tur_nr':tur_nr,'maxiter':maxiter,'learning_rate':learning_rate,'sgd_thresh':sgd_thresh,
+                                         'curzone':curzone,'obj':obj,'Sequence':Sequence,'x0':x0,'y0':y0,'sample':sample,'samps':samps,'SepCabling':SepCabling,'Sx':Sx,'Sy':Sy,'depths':depths,'masses':masses,
+                                         'CableSolver':CableSolver,'tl_metaheuristic':tl_metaheuristic,'tl_milp':tl_milp,'mip_gap':mip_gap}) 
     [metrics_recorder[key].append(None) for key in ["sgd_constraint_violation", "tur_dist_violation", "bound_violation"]]   # first run: no optimization
     
     # Optimization setup
@@ -705,17 +710,12 @@ elif Mode == 'competitive':
             learning_rate = windTurbines.diameter()*0.1
         else:
             learning_rate = windTurbines.diameter()*0.05
-        
-        # Same for time parameter in case of MILP cabling optimization. Set down computational time for re-iterations
-        if i > len(list(set(Sequence))):
-            Routers = {'Heuristic': None,
-                       'MetaHeuristic': MetaHeuristic(time_limit=0.3),
-                       'MILP_cplex': MILP(solver_name='cplex', time_limit=3, mip_gap=0.005, verbose=False),
-                       'MILP_ortools': MILP(solver_name='ortools', time_limit=3, mip_gap=0.005, verbose=False)}
-        
+                
         # record settings
         [metrics_recorder[key].append(None) for key in ["sgd_constraint_violation", "tur_dist_violation", "bound_violation"]]   # first run: no optimization
-        metrics_recorder['settings'].append({'Mode':Mode,'CableSolver':CableSolver,'Model':Model,'seed:':seed,'d_RD':d_RD,'tur_nr':tur_nr,'maxiter':maxiter,'learning_rate':learning_rate,'sgd_thresh':sgd_thresh,'curzone':curzone,'obj':obj,'Sequence':Sequence,'x0':x0,'y0':y0,'sample':sample,'samps':samps,'SepCabling':SepCabling,'Sx':Sx,'Sy':Sy,'depths':depths,'masses':masses}) 
+        metrics_recorder['settings'].append({'Mode':Mode,'CableSolver':CableSolver,'Model':Model,'seed:':seed,'d_RD':d_RD,'tur_nr':tur_nr,'maxiter':maxiter,'learning_rate':learning_rate,'sgd_thresh':sgd_thresh,
+                                             'curzone':curzone,'obj':obj,'Sequence':Sequence,'x0':x0,'y0':y0,'sample':sample,'samps':samps,'SepCabling':SepCabling,'Sx':Sx,'Sy':Sy,'depths':depths,'masses':masses,
+                                             'CableSolver':CableSolver,'tl_metaheuristic':tl_metaheuristic,'tl_milp':tl_milp,'mip_gap':mip_gap}) 
         
         # Optimization Setup
         tf = TopFarmProblem(
