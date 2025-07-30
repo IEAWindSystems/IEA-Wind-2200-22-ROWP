@@ -26,6 +26,7 @@ from pathlib import Path
 from scipy.interpolate import RegularGridInterpolator
 # from ssms.CalculateMass import CalculateMass
 from optiwindnet.api import WindFarmNetwork, ModelOptions, MILP, MetaHeuristic
+from optiwindnet.augmentation import poisson_disc_filler
 from shapely.geometry import Point, Polygon
 from topfarm.constraint_components.boundary import MultiWFBoundaryConstraint, BoundaryType
 from RecordFunc import create_recorder, record_cable_metrics, record_main_metrics_multisub, record_main_metrics_singlesub, record_results_constraints
@@ -394,37 +395,13 @@ def lcoe_jac(x, y, **kwargs):
 # print('difference between fd and analytic grads: ')
 # print(grad - np.array(lcoe_grad).flatten())
 
-#%% Prepare initial layout
-def random_points_in_polygon(polygon, nr_turbines):
-    points = []
-    min_x, min_y, max_x, max_y = polygon.bounds  # Bounding box of the polygon
-    
-    while len(points) < nr_turbines:
-        # Generate a random point within the bounding box
-        random_point = Point(np.random.uniform(min_x, max_x), np.random.uniform(min_y, max_y))
-        
-        # Check if the point is within the polygon
-        if polygon.contains(random_point):
-            points.append((random_point.x, random_point.y))
-    
-    return points
-
-# Function to generate random points in polygons
-def get_random_points(wind_farm_name, nr_turbines):
-    polygon = polygons[wind_farm_name]
-    return random_points_in_polygon(polygon, nr_turbines)
-
-# Create polygons dynamically
-polygons = {
-    name: Polygon(list(zip(boundary[:, 0], boundary[:, 1])))
-    for name, boundary in boundaries.items()
-}
-# Generate initial layouts for each wind farm
-points = {name: get_random_points(name, tur_nr[wf[name]]) for name in wf}
-
 #%% General constraints
 # Min spacing
 min_spacing_m = d_RD * windTurbines.diameter()  #minimum inter-turbine spacing in meters
+
+# Generate initial layouts for each wind farm
+coords = {name: poisson_disc_filler(tur_nr[wf[name]], min_dist=0.8*min_spacing_m, BorderC=boundaries[name])
+          for name in wf}
 
 #%% Recorder
 metrics_recorder = create_recorder(Sequence)
@@ -582,10 +559,8 @@ def postprocess_recorder(data):
 if Mode == 'cooperative':
     Sequence = ['north','mid','south']
     plot_folder = "Figures//Figures_cooperative"
-    # Initital Layout
-    x0 = np.concatenate([np.array(points[name])[:, 0] for name in wf])
-    y0 = np.concatenate([np.array(points[name])[:, 1] for name in wf])
-    
+    # Initial Layout
+    x0, y0 = np.concatenate(tuple(coords[name] for name in wf)).T
     # Constraint
     joint_boundaries = MultiWFBoundaryConstraint(
         geometry = [boundaries[name] for name in wf],  # Boundary mapping
@@ -686,8 +661,7 @@ elif Mode == 'competitive':
             x0 = np.array(metrics_recorder['x_'+curzone][-1])
             y0 = np.array(metrics_recorder['y_'+curzone][-1])
         else:
-            x0 = np.array(points[curzone]).T[0]
-            y0 = np.array(points[curzone]).T[1]
+            x0, y0 = coords[curzone].T
     
         # Constraint
         constraint_comp = XYBoundaryConstraint([InclusionZone(boundaries[Sequence[i]])], 'multi_polygon')
