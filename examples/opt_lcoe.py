@@ -258,7 +258,14 @@ SepCabling = False
 opt_nr = 1
 if Mode == 'cooperative':
     Sequence = list(dict.fromkeys(Sequence))
-
+    
+# update font to latex
+import matplotlib.font_manager as font_manager
+font_dir = ["font\Serif"]
+for font in font_manager.findSystemFonts(font_dir):
+    font_manager.fontManager.addfont(font)
+plt.rcParams["font.family"] = "Serif"
+#
 #%% Function to create the random sampling of wind speed and wind directions
 def sampling():
     ind = np.random.choice(np.arange(dirs.size), samps, p=freqs)
