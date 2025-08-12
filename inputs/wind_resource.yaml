@@ -13,7 +13,7 @@ wind_resource:
     - 0.1588
     - 0.1067
     - 0.0872
-    - 0.0755
+    - 0.0754
     dims:
     - wind_direction
   turbulence_intensity: 
