@@ -34,9 +34,9 @@ from RecordFunc import create_recorder, record_cable_metrics, record_main_metric
 #
 #%% INPUTS
 # General inputs
-Mode = 'cooperative'                    # 'cooperative' or 'competitive' or 'evaluate_recorder' or 'evaluate_multiter' or 'CompareCabling'
 File = 'res_coop_6D_S4_processed'
 Sequence = ['north','mid','south']*4    # define sequence of zones for sequential design
+Mode = 'cooperative'                    # 'cooperative' or 'competitive' or 'evaluate_recorder' or 'evaluate_multiter' or 'CompareCabling' or 'evalute_layout'
 CableSolver = 'MetaHeuristic'           # 'Heuristic', 'MetaHeuristic', 'MILP_cplex' or 'MILP_ortools'
 Continue = False                        # set to True if you give foregoing metrics_recorder to continue optimization
 Model = 'turbopark'                     # 'jensen', 'gauss' or 'turbopark'
@@ -48,6 +48,10 @@ plot_each = 1                           # define in which interval a plot should
 d_RD = 6                                # min spacing distance in rotor diameters
 step = 10                               # at each "step" iterations, the full wind rose is recalculated in postprocessing (when sampling is used during opt)
 seed = 2                                # random np seed for initial layout configuration
+
+# x_eva = [550507.3,551004.3,552353.3,551501.3,552850.3,550010.3,552353.3,553915.3,553986.3,553986.3,559453.3,553986.3,551501.3,554057.3,555619.3,555619.3,555619.3,555619.3,556684.3,555690.3,555619.3,555619.3,555619.3,555690.3,557181.3,557749.3,558033.3,558104.3,559311.3,557465.3,557394.3,558033.3,558885.3]
+# y_eva = [5841236.0,5842585.0,5836621.0,5837686.0,5841591.0,5839603.0,5844218.0,5846064.0,5836692.0,5839745.0,5849898.0,5844076.0,5839319.0,5834491.0,5833639.0,5835485.0,5836834.0,5839035.0,5834704.0,5841804.0,5843934.0,5846135.0,5848123.0,5832716.0,5849969.0,5840242.0,5842088.0,5843934.0,5848265.0,5848123.0,5838325.0,5850963.0,5846135.0]
+# zone_eva = 'north'
 
 # plot lims
 xlim = None                             # specify xlim for convergence plot or put None
@@ -831,6 +835,31 @@ elif Mode == 'evaluate_recorder':
     # plot_convergence(mr=metrics_recorder,item='aep',plotstr='AEP (GWh)',obj=0,overall=0,optfat=1)
     # plot_convergence(mr=metrics_recorder,item='cable_cost',plotstr='Cable Cost (€)',obj=0,overall=0,optfat=1)
     # plot_convergence(mr=metrics_recorder,item='mp_cost',plotstr='Monopile Cost (€)',obj=0,overall=0,optfat=1)
+    
+#%% Evaluate layout
+elif Mode == 'evalute_layout':
+    xn = []
+    yn = []
+    nb = []
+    nnb = []
+    curzone = zone_eva
+    Sx = [Subs_x[wf[curzone]]]
+    Sy = [Subs_y[wf[curzone]]]
+    res = lcoe_func(x_eva,y_eva)
+    
+    plot_folder = "Figures//FinalResult"
+    boundplot = list(boundaries.values())
+    metrics_recorder['iteration'] = [0,1]
+    metrics_recorder['cur_zone'] = [[curzone],[curzone]]
+    metrics_recorder['settings'].append({'d_RD':d_RD})
+    metrics_recorder['x_'+curzone] = [x_eva,x_eva]
+    metrics_recorder['y_'+curzone] = [y_eva,y_eva]
+    # metrics_recorder['lcoe_'+curzone] = res
+    plot = XYPlotCompBathym(save_plot_per_iteration=True, plot_initial=True, memory=0, X=X_utm, Y=Y_utm, Z=Z, Sx=Sub_x, Sy=Sub_y, cables=cables_plot, metrics_recorder=metrics_recorder, Xn=xn, Yn=yn, b=boundplot, opt_nr=opt_nr, folder=plot_folder, sampling=sample, obj=None, optimize=False, paper=True)
+    inputs = {}
+    inputs['x'] = x_eva
+    inputs['y'] = y_eva
+    plot.compute(inputs,[])
 #%% Compare Cabling
 elif Mode == 'CompareCabling':
     plt.figure(figsize=(5, 3))
