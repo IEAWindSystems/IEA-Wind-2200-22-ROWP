@@ -26,7 +26,7 @@ import windIO
 from pathlib import Path
 from scipy.interpolate import RegularGridInterpolator
 # from ssms.CalculateMass import CalculateMass
-from optiwindnet.api import WindFarmNetwork, ModelOptions, MILP, MetaHeuristic, Heuristic
+from optiwindnet.api import WindFarmNetwork, ModelOptions, MILPRouter, HGSRouter, EWRouter
 from optiwindnet.augmentation import poisson_disc_filler
 from shapely.geometry import Point, Polygon
 from topfarm.constraint_components.boundary import MultiWFBoundaryConstraint, BoundaryType
@@ -236,10 +236,10 @@ CableSolvers_order = [CableSolver] + [s for s in CableSolvers if s != CableSolve
 tl_metaheuristic = 0.3  # time limit
 tl_milp = 5
 mip_gap = 0.005
-Routers = {'Heuristic': Heuristic(),
-           'MetaHeuristic': MetaHeuristic(time_limit=tl_metaheuristic),
-           'MILP_cplex': MILP(solver_name='cplex', time_limit=tl_milp, mip_gap=mip_gap, verbose=False),
-           'MILP_ortools': MILP(solver_name='ortools', time_limit=tl_milp, mip_gap=mip_gap, verbose=False)}
+Routers = {'Heuristic': EWRouter(),
+           'MetaHeuristic': HGSRouter(time_limit=tl_metaheuristic),
+           'MILP_cplex': MILPRouter(solver_name='cplex', time_limit=tl_milp, mip_gap=mip_gap, verbose=False),
+           'MILP_ortools': MILPRouter(solver_name='ortools', time_limit=tl_milp, mip_gap=mip_gap, verbose=False)}
 cables = np.array([[c["capacity_NrT"], c["cost_€_m"]] for c in cable_specs])
 cables_plot = np.array([[c["diameter_mm2"], c["capacity_NrT"], c["cost_€_m"]] for c in cable_specs])
 
