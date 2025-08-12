@@ -67,7 +67,7 @@ sgd_thresh = 0.02                       # SGD threshold
 MP_ref = 1                              # reference turbine type for monopile mass scaling. 0 = 10MW, 1 = 15MW, 2 = 3.4MW
 
 # lcoe parameters
-d = 0.05                                # [-] discount rate
+d = 0.0661                              # [-] discount rate, from NREL CoE 2024 report
 life = 25                               # years, lifetime
 RP = 22                                 # MW
 D = 284                                 # m
@@ -76,7 +76,7 @@ HTrans = 15                             # m
 WaveHeight = 2.52                       # m
 WavePeriod = 5.45                       # s
 WindSpeed = 9.924                       # m/s ToDo: verfiy it is average wind speed
-capex = 9.6712e7 * 0.924                # €2024 per turbine, excl. Monopile and cabling, from NREL COE Report 2024, converted to € with 2024 average exchange rate
+capex = 9.6734e7 * 0.924                # €2024 per turbine, excl. Monopile and cabling, from NREL COE Report 2024, converted to € with 2024 average exchange rate
 OpexAnnual = 2.97e6 * 0.924             # €2024 per turbine, annual OPEX,from NREL COE Report 2024, converted to € with 2024 average exchange rate
 LP = 0                                  # $2010 per turbine, liquidation proceeds, from DETECT for HKN scaled (22MW turbines)
 
