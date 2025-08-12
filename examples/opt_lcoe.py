@@ -12,7 +12,8 @@ from datetime import datetime
 from py_wake.site import XRSite
 from py_wake.wind_turbines import WindTurbine
 from py_wake.wind_turbines.power_ct_functions import PowerCtTabular
-from py_wake import NOJ, BastankhahGaussian, Nygaard_2022
+from py_wake import NOJ, Nygaard_2022
+from py_wake.literature import Bastankhah_PorteAgel_2014
 from topfarm.cost_models.cost_model_wrappers import CostModelComponent
 from topfarm.easy_drivers import EasySGDDriver
 from OptPlotBathy import XYPlotCompBathym
@@ -127,7 +128,7 @@ windTurbines = WindTurbine(name=farm_dat['turbines']['name'], diameter=rd, hub_h
 if Model == 'jensen':
     wake_model = NOJ(site, windTurbines, k=0.05, rotorAvgModel=RotorCenter())
 elif Model == 'gauss':
-    wake_model = BastankhahGaussian(site, windTurbines, rotorAvgModel=RotorCenter(), turbulenceModel=CrespoHernandez())
+    wake_model = Bastankhah_PorteAgel_2014(site, windTurbines, rotorAvgModel=RotorCenter(), turbulenceModel=CrespoHernandez(), k=0.0324555)
 elif Model == 'turbopark':
     wake_model = Nygaard_2022(site, windTurbines)
     
