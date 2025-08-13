@@ -14,14 +14,14 @@ class QLSModel(object):
     def __init__(self, model, input_scaler, output_scaler):
         self.model, self.input_scaler, self.output_scaler = model.getMetaModel(), input_scaler, output_scaler
         
-    def predict(self, RP, D, HTrans, HHub_Ratio, WaterDepth, WaveHeight, WavePeriod, WindSpeed):
-        inps = np.asarray([RP, D, HTrans, HHub_Ratio, WaterDepth, WaveHeight, WavePeriod, WindSpeed]).T
+    def predict(self, D, HTrans, HHub_Ratio, WaterDepth, WaveHeight, WavePeriod, WindSpeed):
+        inps = np.asarray([D, HTrans, HHub_Ratio, WaterDepth, WaveHeight, WavePeriod, WindSpeed]).T
         inps_scaled = self.input_scaler.transform(np.atleast_2d(inps))
         scaled_output = self.model(inps_scaled)
         output = self.output_scaler.inverse_transform(scaled_output).ravel()
         return output
 
-def CalculateMass(RP, D, HTrans, HHub_Ratio, WaterDepth, WaveHeight, WavePeriod, WindSpeed, IP_item):
+def CalculateMass(D, HTrans, HHub, WaterDepth, WaveHeight, WavePeriod, WindSpeed, IP_item):
     # load the surrogates
     model_path = os.path.dirname(__file__).replace("\\", "/") + '/models/QLS'
     model_indicator = '_QLS_surrogate_model.pickle'
@@ -46,7 +46,7 @@ def CalculateMass(RP, D, HTrans, HHub_Ratio, WaterDepth, WaveHeight, WavePeriod,
         output_channel = output_channel_names[out_item]
         #print(output_channel)
         qlsm = QLSModel(dic['models'][out_item], dic['input_scaler'], dic['output_scalers'][output_channel])
-        mass = qlsm.predict(RP, D, HTrans, HHub_Ratio, WaterDepth, WaveHeight, WavePeriod, WindSpeed)
+        mass = qlsm.predict(D, HTrans, HHub, WaterDepth, WaveHeight, WavePeriod, WindSpeed)
         res.append(np.ndarray.tolist(mass))
     return res
 

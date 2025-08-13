@@ -15,19 +15,20 @@ import pickle
 
 
 def trainQLS():
-    plt.close('all')
-
-    data = pd.read_csv('data/tower_mass_results.dat', sep=' ', )
-    data_extended = pd.read_csv('data/tower_mass_results_extended_depth_results.dat', sep=' ', )
+    print('Building pickel files for mass surrogate model...')
+    data = pd.read_csv('ssms/data/tower_mass_results.dat', sep=' ', )
+    data_extended = pd.read_csv('ssms/data/tower_mass_results_extended_depth_results.dat', sep=' ', )
     df = data[data.columns[:-1]]
     df_extended = data_extended[data_extended.columns[:-1]]
     df.columns = data.columns[1:]
     df_extended.columns = data_extended.columns[1:]
     df = pd.concat([df, df_extended])
+    # filter out 20MW values --> mass surrogate only valid for that rated power!!
+    df = df[df['RP'] == 20.0]
 
-    in_cols = ['RP', 'D', 'HTrans', 'HHub_Ratio',
+    in_cols = ['D', 'HTrans', 'HHub',
                'WaterDepth', 'WaveHeight', 'WavePeriod', 'WindSpeed']
-    short_in = ['RP', 'D', 'HT', 'HHR',
+    short_in = ['D', 'HT', 'HH',
                 'WD', 'WH', 'WP', 'WS']
     out_cols = ['monopile_mass', 'tower_mass', 'total_mass']
     df.reset_index(drop=True, inplace=True)
@@ -126,11 +127,4 @@ def trainQLS():
                    )
         with open(path, 'wb') as f:
             pickle.dump(dic, f)
-
-
-def main():
-    if __name__ == '__main__':
-        pass
-
-
-main()
+        print('...done.')
