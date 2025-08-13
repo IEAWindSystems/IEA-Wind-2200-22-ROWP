@@ -25,8 +25,9 @@ from py_wake.turbulence_models import CrespoHernandez
 import windIO
 from pathlib import Path
 from scipy.interpolate import RegularGridInterpolator
-# from ssms.CalculateMass import CalculateMass
 from optiwindnet.api import WindFarmNetwork, ModelOptions, MILPRouter, HGSRouter, EWRouter
+from ssms.CalculateMass import CalculateMass
+from ssms.curve_fit_monopile import trainQLS
 from optiwindnet.augmentation import poisson_disc_filler
 from shapely.geometry import Point, Polygon
 from topfarm.constraint_components.boundary import MultiWFBoundaryConstraint, BoundaryType
@@ -48,10 +49,6 @@ plot_each = 1                           # define in which interval a plot should
 d_RD = 6                                # min spacing distance in rotor diameters
 step = 10                               # at each "step" iterations, the full wind rose is recalculated in postprocessing (when sampling is used during opt)
 seed = 2                                # random np seed for initial layout configuration
-
-# x_eva = [550507.3,551004.3,552353.3,551501.3,552850.3,550010.3,552353.3,553915.3,553986.3,553986.3,559453.3,553986.3,551501.3,554057.3,555619.3,555619.3,555619.3,555619.3,556684.3,555690.3,555619.3,555619.3,555619.3,555690.3,557181.3,557749.3,558033.3,558104.3,559311.3,557465.3,557394.3,558033.3,558885.3]
-# y_eva = [5841236.0,5842585.0,5836621.0,5837686.0,5841591.0,5839603.0,5844218.0,5846064.0,5836692.0,5839745.0,5849898.0,5844076.0,5839319.0,5834491.0,5833639.0,5835485.0,5836834.0,5839035.0,5834704.0,5841804.0,5843934.0,5846135.0,5848123.0,5832716.0,5849969.0,5840242.0,5842088.0,5843934.0,5848265.0,5848123.0,5838325.0,5850963.0,5846135.0]
-# zone_eva = 'north'
 
 # plot lims
 xlim = None                             # specify xlim for convergence plot or put None
@@ -197,29 +194,30 @@ def depth_interp(x, y):
     return interpolator(np.array([y, x]).T)
 
 # Calculate monopile mass for different water depth
+# Note: a mass surrogate model only with 20MW results is built. Approximation of the 22MW machine.
+trainQLS()
 depths = np.linspace(np.min(-Z),np.max(-Z),20)
-# ph = 15     # Platform height [m]
-# swh = 2.52  # Significant Wave Height [m]
-# swp = 5.45  # Significiant Wave Period [s]
-# # P_interpolator = interp1d(np.cumsum(sum(P)), ws, kind='linear')  # interpolator to get mean wind sped (@50% probability)
-# # V_ave = P_interpolator(0.5).tolist()
-# import scipy.special as sp
-# def mean_wind_speed(A, k):
-#     return A * sp.gamma(1 + 1/k)
-# V_ave = []
-# for i in range(len(wd)):
-#     V_ave.append(mean_wind_speed(A['data'][i],k['data'][i]))
-# V_ave = np.sum(np.array(V_ave) * np.array(freq['data']))
-# masses = []
-# for z in depths:
-#    cur_mass = CalculateMass(RP=rp/1e6, D=rd, HTrans=ph, HHub_Ratio=hh/rd, WaterDepth=z, WaveHeight=swh, WavePeriod=swp, WindSpeed=V_ave, IP_item=MP_ref)
-#    masses.append(cur_mass[0][0])
-# # add transition piece (100t, from 22MW report)
-# masses = [x + 100000 for x in masses]
-masses = [985788.0033692981, 1006729.722727049, 1027991.492707832, 1049573.3133116479, 1071475.1845384957, 1093697.1063883766, 1116239.0788612892, 1139101.1019572348, 1162283.1756762124, 1185785.300018223, 1209607.4749832656, 1233749.7005713405, 1258211.9767824481, 1282994.3036165882, 1308096.6810737606, 1333519.1091539655, 1359261.587857203, 1385324.1171834725, 1411706.6971327746, 1438409.3277051093]
+ph = 15     # Platform height [m]
+swh = 2.52  # Significant Wave Height [m]
+swp = 5.45  # Significiant Wave Period [s]
+# P_interpolator = interp1d(np.cumsum(sum(P)), ws, kind='linear')  # interpolator to get mean wind sped (@50% probability)
+# V_ave = P_interpolator(0.5).tolist()
+import scipy.special as sp
+def mean_wind_speed(A, k):
+    return A * sp.gamma(1 + 1/k)
+V_ave = []
+for i in range(len(wd)):
+    V_ave.append(mean_wind_speed(A['data'][i],k['data'][i]))
+V_ave = np.sum(np.array(V_ave) * np.array(freq['data']))
+masses = []
+for z in depths:
+   cur_mass = CalculateMass(D=rd, HTrans=HTrans, HHub=hh, WaterDepth=z, WaveHeight=swh, WavePeriod=swp, WindSpeed=V_ave, IP_item=1)
+   masses.append(cur_mass[0][0])
+# add transition piece (100t, from 22MW report)
+masses = [x + 100000 for x in masses]
+# masses = [985788.0033692981, 1006729.722727049, 1027991.492707832, 1049573.3133116479, 1071475.1845384957, 1093697.1063883766, 1116239.0788612892, 1139101.1019572348, 1162283.1756762124, 1185785.300018223, 1209607.4749832656, 1233749.7005713405, 1258211.9767824481, 1282994.3036165882, 1308096.6810737606, 1333519.1091539655, 1359261.587857203, 1385324.1171834725, 1411706.6971327746, 1438409.3277051093]
 
 # Fit a polynomial of degree 2
-# depthmass = np.genfromtxt('depth.mass', delimiter=',')
 depthmass = np.column_stack((masses,depths))
 coefficients = np.polyfit(depthmass[:, 1], depthmass[:, 0], 2)
 polynomial = np.poly1d(coefficients)
@@ -231,15 +229,16 @@ samps = 100    #number of samples
 site.interp_method = 'linear'
 
 # Cable optimization
-CableSolvers = ['MetaHeuristic', 'Heuristic', 'MILP_ortools', 'MILP_cplex']         # Available solvers in default order
+CableSolvers = ['MetaHeuristic', 'Heuristic', 'MILP_cplex', 'MILP_gurobi', 'MILP_ortools']         # Available solvers in default order
 CableSolvers_order = [CableSolver] + [s for s in CableSolvers if s != CableSolver]  # Try primary solver first
 tl_metaheuristic = 0.3  # time limit
-tl_milp = 5
+tl_milp = 3
 mip_gap = 0.005
 Routers = {'Heuristic': EWRouter(),
            'MetaHeuristic': HGSRouter(time_limit=tl_metaheuristic),
            'MILP_cplex': MILPRouter(solver_name='cplex', time_limit=tl_milp, mip_gap=mip_gap, verbose=False),
-           'MILP_ortools': MILPRouter(solver_name='ortools', time_limit=tl_milp, mip_gap=mip_gap, verbose=False)}
+           'MILP_ortools': MILPRouter(solver_name='ortools', time_limit=tl_milp, mip_gap=mip_gap, verbose=False),
+           'MILP_gurobi': MILPRouter(solver_name='gurobi', time_limit=tl_milp, mip_gap=mip_gap, verbose=False)}
 cables = np.array([[c["capacity_NrT"], c["cost_€_m"]] for c in cable_specs])
 cables_plot = np.array([[c["diameter_mm2"], c["capacity_NrT"], c["cost_€_m"]] for c in cable_specs])
 
@@ -282,19 +281,15 @@ def sampling():
 
 #%% Cabling optimization
 def opt_cabling(x=None,y=None,Sx=None,Sy=None,cables=None):
-    for i, solver in enumerate(CableSolvers_order):
-        if i > 0: print(f"Trying with solver: {solver}")
-        router = Routers.get(solver)
-        try:
-            wfn = WindFarmNetwork(turbinesC=np.column_stack((x, y)),substationsC=np.column_stack((Sx, Sy)),cables=cables,router=router)
-            wfn.optimize()
-            break
-        except Exception as e:
-            print(f"Solver {solver} failed: {e}")
-            x_if.append(x)
-            y_if.append(y)
+    if CableSolver in ['MILP_cplex', 'MILP_ortools', 'MILP_gurobi']:
+        # warm start
+        wfn = WindFarmNetwork(turbinesC=np.column_stack((x, y)),substationsC=np.column_stack((Sx, Sy)),cables=cables,router=Routers.get('MetaHeuristic'))
+        wfn.optimize()
+        # chosen router
+        wfn.optimize(router=Routers.get(CableSolver))
     else:
-        print("All solvers failed.")
+        wfn = WindFarmNetwork(turbinesC=np.column_stack((x, y)),substationsC=np.column_stack((Sx, Sy)),cables=cables,router=Routers.get(CableSolver))
+        wfn.optimize()
     return wfn
 
 #%% Objective function
@@ -606,7 +601,7 @@ if Mode == 'cooperative':
         maximize = True
     
     # record settings
-    metrics_recorder['settings'].append({'Mode':Mode,'CableSolver':CableSolver,'Model':Model,'seed:':seed,'d_RD':d_RD,'tur_nr':tur_nr,'maxiter':maxiter,'learning_rate':learning_rate,'sgd_thresh':sgd_thresh,
+    metrics_recorder['settings'].append({'Mode':Mode,'Model':Model,'seed:':seed,'d_RD':d_RD,'tur_nr':tur_nr,'maxiter':maxiter,'learning_rate':learning_rate,'sgd_thresh':sgd_thresh,
                                          'curzone':curzone,'obj':obj,'Sequence':Sequence,'x0':x0,'y0':y0,'sample':sample,'samps':samps,'SepCabling':SepCabling,'Sx':Sx,'Sy':Sy,'depths':depths,'masses':masses,
                                          'CableSolver':CableSolver,'tl_metaheuristic':tl_metaheuristic,'tl_milp':tl_milp,'mip_gap':mip_gap}) 
     [metrics_recorder[key].append(None) for key in ["sgd_constraint_violation", "tur_dist_violation", "bound_violation"]]   # first run: no optimization
@@ -725,7 +720,7 @@ elif Mode == 'competitive':
                 
         # record settings
         [metrics_recorder[key].append(None) for key in ["sgd_constraint_violation", "tur_dist_violation", "bound_violation"]]   # first run: no optimization
-        metrics_recorder['settings'].append({'Mode':Mode,'CableSolver':CableSolver,'Model':Model,'seed:':seed,'d_RD':d_RD,'tur_nr':tur_nr,'maxiter':maxiter,'learning_rate':learning_rate,'sgd_thresh':sgd_thresh,
+        metrics_recorder['settings'].append({'Mode':Mode,'Model':Model,'seed:':seed,'d_RD':d_RD,'tur_nr':tur_nr,'maxiter':maxiter,'learning_rate':learning_rate,'sgd_thresh':sgd_thresh,
                                              'curzone':curzone,'obj':obj,'Sequence':Sequence,'x0':x0,'y0':y0,'sample':sample,'samps':samps,'SepCabling':SepCabling,'Sx':Sx,'Sy':Sy,'depths':depths,'masses':masses,
                                              'CableSolver':CableSolver,'tl_metaheuristic':tl_metaheuristic,'tl_milp':tl_milp,'mip_gap':mip_gap}) 
         
@@ -769,7 +764,7 @@ elif Mode == 'evaluate_multiter':
     data = data['metrics_recorder']
     metrics_recorder = postprocess_recorder(data)
     # Save processed file
-    with open(File + "_processed.pkl", "wb") as file:
+    with open("Results\\" + File + "_processed.pkl", "wb") as file:
         pickle.dump({"metrics_recorder": metrics_recorder}, file)
     plot_convergence(mr=metrics_recorder,item='lcoe',plotstr='LCOE (€/MWh)',obj=0,overall=1,optfat=1)
     plot_convergence(mr=metrics_recorder,item='aep',plotstr='AEP (GWh)',obj=0,overall=0,optfat=1)
@@ -835,9 +830,110 @@ elif Mode == 'evaluate_recorder':
     # plot_convergence(mr=metrics_recorder,item='aep',plotstr='AEP (GWh)',obj=0,overall=0,optfat=1)
     # plot_convergence(mr=metrics_recorder,item='cable_cost',plotstr='Cable Cost (€)',obj=0,overall=0,optfat=1)
     # plot_convergence(mr=metrics_recorder,item='mp_cost',plotstr='Monopile Cost (€)',obj=0,overall=0,optfat=1)
+#%% Compare Cabling
+elif Mode == 'CompareCabling':
+    Files = ["test3_heuristic_processed",
+             "test3_metaheuristic_processed",
+             "test3_ortools_processed",
+             "test3_gurobi_processed",
+             "test3_cplex_cont_processed"]
+    CabOpt = ["heuristic","metaheuristic","ortools","gurobi","cplex"]
     
+    fig, axs = plt.subplots(1, len(Sequence), figsize=(15, 4))
+    for i, zone in enumerate(Sequence):
+        ax = axs[i]
+        for f, File in enumerate(Files):
+        # File = "metric_recorder_cooperative_2D_6000it_processed"
+            # specify file you want to load
+            with open("C:\\Software\\IEA-Wind-2200-22-ROWP\\examples\\Results\\" + File + ".pkl", "rb") as file:
+                data = pickle.load(file)
+            mr = data['metrics_recorder']
+            item = 'lcoe'
+            # item = 'cable_cost'
+            plotstr = 'LCOE (€/MWh)'
+            # plotstr = 'Cable Cost (€)'
+            overall = 0
+            optfat = 0
+            obj = 0
+            
+            # plt.figure(figsize=(5, 3))
+            ax.plot(
+                np.array(mr['iteration'])[np.array([z[0] for z in mr['cur_zone']]) == zone],
+                np.array(mr[item + '_' + zone])[np.array([z[0] for z in mr['cur_zone']]) == zone],
+                label=zone + '_' + CabOpt[f],
+                linewidth=1
+            )
+            # plt.plot(np.array(mr['iteration']),[x if x!=0 else np.nan for x in mr[item+'_'+zone]], label=zone+'_' + CabOpt[f], linewidth = 1)
+            # plt.plot(np.array(mr['iteration']),[x if x!=0 else np.nan for x in mr[item+'_mid']], label='Mid_' + CabOpt[f], linewidth = 1)
+            # plt.plot(np.array(mr['iteration']),[x if x!=0 else np.nan for x in mr[item+'_south']], label='South_' + CabOpt[f], linewidth = 1)
+            if obj:
+                plt.plot(np.array(mr['iteration']),[x if x!=0 else np.nan for x in mr[item]], label='Overall', linewidth = 1)
+            if overall:
+                plt.plot(np.array(mr['iteration']),[x if x!=0 else np.nan for x in mr[item+'_all']], label='Overall', linewidth = 1)
+            if optfat:
+                for i in range(0,len(mr['lcoe_all'])-1):
+                    if i == 0 and f == len(Files)-1:
+                        leg = 'Current objective'
+                    else:
+                        leg = None
+                    if mr['opt_nr'][i] == mr['opt_nr'][i+1] and mr['cur_zone'][i][0] == 'mid':
+                        plt.plot(np.array(mr['iteration'][i:i+2])-1,
+                            np.array(mr[item+'_'+mr['cur_zone'][i][0]][i:i+2]), linestyle="--", linewidth = 0.8, color="black", label=leg)
+        FS = 9
+        ax.legend(fontsize=FS)
+        ax.grid()
+        ax.set_xlabel('Iteration',fontsize=FS)
+        ax.set_ylabel(plotstr,fontsize=FS)
+        ax.set_title(zone,fontsize=FS+2)
+        ax.tick_params(axis='both', labelsize=FS-1)
+    
+    # plt.figure(figsize=(5, 3))
+    # for zone in Sequence:
+    #     for f, File in enumerate(Files):
+    #     # File = "metric_recorder_cooperative_2D_6000it_processed"
+    #         # specify file you want to load
+    #         with open("C:\\Software\\IEA-Wind-2200-22-ROWP\\examples\\Results\\" + File + ".pkl", "rb") as file:
+    #             data = pickle.load(file)
+    #         mr = data['metrics_recorder']
+    #         item = 'lcoe'
+    #         # item = 'cable_cost'
+    #         plotstr = 'LCOE (€/MWh)'
+    #         # plotstr = 'Cable Cost (€)'
+    #         overall = 0
+    #         optfat = 0
+    #         obj = 0
+            
+    #         # plt.figure(figsize=(5, 3))
+    #         plt.plot(np.array(mr['iteration']),[x if x!=0 else np.nan for x in mr[item+'_'+zone]], label=zone+'_' + CabOpt[f], linewidth = 1)
+    #         # plt.plot(np.array(mr['iteration']),[x if x!=0 else np.nan for x in mr[item+'_mid']], label='Mid_' + CabOpt[f], linewidth = 1)
+    #         # plt.plot(np.array(mr['iteration']),[x if x!=0 else np.nan for x in mr[item+'_south']], label='South_' + CabOpt[f], linewidth = 1)
+    #         if obj:
+    #             plt.plot(np.array(mr['iteration']),[x if x!=0 else np.nan for x in mr[item]], label='Overall', linewidth = 1)
+    #         if overall:
+    #             plt.plot(np.array(mr['iteration']),[x if x!=0 else np.nan for x in mr[item+'_all']], label='Overall', linewidth = 1)
+    #         if optfat:
+    #             for i in range(0,len(mr['lcoe_all'])-1):
+    #                 if i == 0 and f == len(Files)-1:
+    #                     leg = 'Current objective'
+    #                 else:
+    #                     leg = None
+    #                 if mr['opt_nr'][i] == mr['opt_nr'][i+1] and mr['cur_zone'][i][0] == 'mid':
+    #                     plt.plot(np.array(mr['iteration'][i:i+2])-1,
+    #                         np.array(mr[item+'_'+mr['cur_zone'][i][0]][i:i+2]), linestyle="--", linewidth = 0.8, color="black", label=leg)
+    # FS = 9
+    # plt.legend(fontsize=FS)
+    # plt.grid()
+    # plt.xlabel('Iteration',fontsize=FS)
+    # plt.ylabel(plotstr,fontsize=FS)
+    # plt.title(plotstr,fontsize=FS+2)
+    # plt.xticks(fontsize=FS-1)
+    # plt.yticks(fontsize=FS-1)
 #%% Evaluate layout
-elif Mode == 'evalute_layout':
+elif Mode == 'evaluate_layout':
+    x_eva = [550507.3,551004.3,552353.3,551501.3,552850.3,550010.3,552353.3,553915.3,553986.3,553986.3,559453.3,553986.3,551501.3,554057.3,555619.3,555619.3,555619.3,555619.3,556684.3,555690.3,555619.3,555619.3,555619.3,555690.3,557181.3,557749.3,558033.3,558104.3,559311.3,557465.3,557394.3,558033.3,558885.3]
+    y_eva = [5841236.0,5842585.0,5836621.0,5837686.0,5841591.0,5839603.0,5844218.0,5846064.0,5836692.0,5839745.0,5849898.0,5844076.0,5839319.0,5834491.0,5833639.0,5835485.0,5836834.0,5839035.0,5834704.0,5841804.0,5843934.0,5846135.0,5848123.0,5832716.0,5849969.0,5840242.0,5842088.0,5843934.0,5848265.0,5848123.0,5838325.0,5850963.0,5846135.0]
+    zone_eva = 'north'
+    
     xn = []
     yn = []
     nb = []
@@ -860,50 +956,3 @@ elif Mode == 'evalute_layout':
     inputs['x'] = x_eva
     inputs['y'] = y_eva
     plot.compute(inputs,[])
-#%% Compare Cabling
-elif Mode == 'CompareCabling':
-    plt.figure(figsize=(5, 3))
-    Files = ["metric_recorder_sequential_heuristic_nmsnmsnmsnmsnms_processed",
-             "metric_recorder_sequential_metaheuristic_nmsnmsnmsnmsnms_processed",
-             "metric_recorder_sequential_cplex_nmsnmsnmsnmsnms_processed",
-             "metric_recorder_sequential_ortools_nmsnmsnmsnmsnms_processed"]
-    CabOpt = ["heuristic","metaheuristic","cplex","ortools"]
-    for f, File in enumerate(Files):
-    # File = "metric_recorder_cooperative_2D_6000it_processed"
-        # specify file you want to load
-        with open("C:\\Software\\IEA-Wind-2200-22-ROWP\\examples\\Results\\" + File + ".pkl", "rb") as file:
-            data = pickle.load(file)
-        mr = data['metrics_recorder']
-        item = 'lcoe'
-        # item = 'cable_cost'
-        plotstr = 'LCOE (€/MWh)'
-        # plotstr = 'Cable Cost (€)'
-        overall = 0
-        optfat = 1
-        obj = 0
-        
-        # plt.figure(figsize=(5, 3))
-        # plt.plot(np.array(mr['iteration']),[x if x!=0 else np.nan for x in mr[item+'_north']], label='North_' + CabOpt[f], linewidth = 1)
-        plt.plot(np.array(mr['iteration']),[x if x!=0 else np.nan for x in mr[item+'_mid']], label='Mid_' + CabOpt[f], linewidth = 1)
-        # plt.plot(np.array(mr['iteration']),[x if x!=0 else np.nan for x in mr[item+'_south']], label='South_' + CabOpt[f], linewidth = 1)
-        if obj:
-            plt.plot(np.array(mr['iteration']),[x if x!=0 else np.nan for x in mr[item]], label='Overall', linewidth = 1)
-        if overall:
-            plt.plot(np.array(mr['iteration']),[x if x!=0 else np.nan for x in mr[item+'_all']], label='Overall', linewidth = 1)
-        if optfat:
-            for i in range(0,len(mr['lcoe_all'])-1):
-                if i == 0 and f == len(Files)-1:
-                    leg = 'Current objective'
-                else:
-                    leg = None
-                if mr['opt_nr'][i] == mr['opt_nr'][i+1] and mr['cur_zone'][i][0] == 'mid':
-                    plt.plot(np.array(mr['iteration'][i:i+2])-1,
-                        np.array(mr[item+'_'+mr['cur_zone'][i][0]][i:i+2]), linestyle="--", linewidth = 0.8, color="black", label=leg)
-    FS = 9
-    plt.legend(fontsize=FS)
-    plt.grid()
-    plt.xlabel('Iteration',fontsize=FS)
-    plt.ylabel(plotstr,fontsize=FS)
-    plt.title(plotstr,fontsize=FS+2)
-    plt.xticks(fontsize=FS-1)
-    plt.yticks(fontsize=FS-1)
