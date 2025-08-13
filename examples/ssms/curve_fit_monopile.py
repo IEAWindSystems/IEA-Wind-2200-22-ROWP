@@ -36,7 +36,7 @@ def trainQLS():
     out = df[out_cols]
     count = out.shape[0]
 
-    model_path = 'models/QLS'
+    model_path = 'ssms/models/QLS'
     if not os.path.exists(model_path):
         os.makedirs(model_path)
 
