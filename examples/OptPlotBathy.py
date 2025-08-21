@@ -370,9 +370,9 @@ class XYPlotCompBathym(ExplicitComponent):
                     wspace=0.2
                 )
                      
-            if self.counter == 0:
-                plt.pause(1e-6)
-            mypause(self.delay)
+            # if self.counter == 0:
+            #     plt.pause(1)
+            # mypause(self.delay)
             
             if self.optimize:
                 self.counter += 1

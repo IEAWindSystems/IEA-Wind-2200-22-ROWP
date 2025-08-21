@@ -29,47 +29,56 @@
 # 13. Christopher J. Bay (NREL)
 #
 #%% Preamble
-import os
-os.environ["OPENMDAO_WORKDIR"] = os.path.join(os.path.dirname(__file__), ".openmdao_out")
+# ---
+# General
 import numpy as np
 import pandas as pd
-from py_wake.rotor_avg_models import RotorCenter
 import time
+import matplotlib
 import matplotlib.pyplot as plt
 import xarray as xr
 import utm
 import pickle
 from datetime import datetime
+from pathlib import Path
+from functools import partial
+from multiprocessing import Pool
+from scipy.interpolate import RegularGridInterpolator
+import os
+os.environ["OPENMDAO_WORKDIR"] = os.path.join(os.path.dirname(__file__), ".openmdao_out")
+#
+# ---
+# Topfarm and Pywake
+from py_wake.utils.gradients import fd, autograd
+from py_wake.turbulence_models import CrespoHernandez
 from py_wake.site import XRSite
 from py_wake.wind_turbines import WindTurbine
 from py_wake.wind_turbines.power_ct_functions import PowerCtTabular
 from py_wake import NOJ, Nygaard_2022
 from py_wake.literature import Bastankhah_PorteAgel_2014
+from py_wake.rotor_avg_models import RotorCenter
 from topfarm.cost_models.cost_model_wrappers import CostModelComponent
 from topfarm.easy_drivers import EasySGDDriver
-from OptPlotBathy import XYPlotCompBathym
 from topfarm import TopFarmProblem
 from topfarm.constraint_components.boundary import XYBoundaryConstraint, InclusionZone
-from py_wake.utils.gradients import fd, autograd
 from topfarm.constraint_components.constraint_aggregation import DistanceConstraintAggregation
-from py_wake.turbulence_models import CrespoHernandez
+from topfarm.constraint_components.boundary import MultiWFBoundaryConstraint, BoundaryType
+#
+# ---
+# Specific
 import windIO
-from pathlib import Path
-from scipy.interpolate import RegularGridInterpolator
 from optiwindnet.api import WindFarmNetwork, MILPRouter, HGSRouter, EWRouter
+from optiwindnet.augmentation import poisson_disc_filler
 from ssms.CalculateMass import CalculateMass
 from ssms.curve_fit_monopile import trainQLS
-from optiwindnet.augmentation import poisson_disc_filler
-from topfarm.constraint_components.boundary import MultiWFBoundaryConstraint, BoundaryType
+from OptPlotBathy import XYPlotCompBathym
 from RecordFunc import create_recorder, record_cable_metrics, record_main_metrics_multisub, record_main_metrics_singlesub, record_results_constraints
-from functools import partial
-from multiprocessing import Pool
 #
 #%% Main script to run
-def run_optimization(seed):
+def run_script(seed=2):
     #%% INPUTS
     # General inputs
-    Mode = 'cooperative'                    # 'cooperative' or 'competitive' or 'evaluate_recorder' or 'evaluate_multiter' or 'CompareCabling' or 'evaluate_layout'
+    Mode = 'competitive'                    # 'cooperative' or 'competitive' or 'evaluate_recorder' or 'evaluate_multiter' or 'CompareCabling' or 'evaluate_layout'
     # seed = 2                                # random np seed for initial layout configuration
     Continue = False                        # set to True if you give foregoing metrics_recorder to continue optimization
     File = 'test_s' + str(seed)             # define name of files that is stored or loaded
@@ -83,7 +92,6 @@ def run_optimization(seed):
     plot_each = 100                         # define in which interval a plot should be made
     d_RD = 6                                # min spacing distance in rotor diameters
     step = 10000                            # at each "step" iterations, the full wind rose is recalculated in postprocessing (when sampling is used during opt)
-    
     
     # plot lims
     xlim = None                             # specify xlim for convergence plot or put None
@@ -643,7 +651,7 @@ def run_optimization(seed):
         
         # Plot or not
         if plot_iter:
-            plot_comp = XYPlotCompBathym(save_plot_per_iteration=True, plot_initial=False, memory=0, X=X_utm, Y=Y_utm, Z=Z, Sx=Sub_x, Sy=Sub_y, cables=cables_plot, metrics_recorder=metrics_recorder, b=boundplot, folder=plot_folder, sampling=sample, obj=obj, ploteach=plot_each)
+            plot_comp = XYPlotCompBathym(save_plot_per_iteration=True, plot_initial=True, memory=0, X=X_utm, Y=Y_utm, Z=Z, Sx=Sub_x, Sy=Sub_y, cables=cables_plot, metrics_recorder=metrics_recorder, b=boundplot, folder=plot_folder, sampling=sample, obj=obj, ploteach=plot_each)
         else:
             plot_comp = None
         
@@ -762,7 +770,7 @@ def run_optimization(seed):
             
             # Plot or not
             if plot_iter:
-                plot_comp = XYPlotCompBathym(save_plot_per_iteration=True, plot_initial=False, memory=0, X=X_utm, Y=Y_utm, Z=Z, Sx=Sub_x, Sy=Sub_y, cables=cables_plot, metrics_recorder=metrics_recorder, Xn=xn, Yn=yn, b=boundplot, opt_nr=opt_nr, folder=plot_folder, sampling=sample, obj=obj, ploteach=plot_each)
+                plot_comp = XYPlotCompBathym(save_plot_per_iteration=True, plot_initial=True, memory=0, X=X_utm, Y=Y_utm, Z=Z, Sx=Sub_x, Sy=Sub_y, cables=cables_plot, metrics_recorder=metrics_recorder, Xn=xn, Yn=yn, b=boundplot, opt_nr=opt_nr, folder=plot_folder, sampling=sample, obj=obj, ploteach=plot_each)
             else:
                 plot_comp = None
             
@@ -1038,7 +1046,8 @@ def run_optimization(seed):
         
 #%% Run layout optimization for different initial layouts  
 if __name__ == "__main__":
+    # run_script(seed=3)
     seeds = np.arange(1,200)     # random np seed for initial layout configuration
     num_workers = 4         # number of workers for parallelization
     with Pool(processes=num_workers) as pool:
-        pool.map(run_optimization, seeds)
+        pool.map(run_script, seeds)
