@@ -1,4 +1,5 @@
-#%%
+#%% The IEA Wind 2200-22-MW Reference Offshore Wind Plants 
+#
 # ***** Routine to optimize (or evaluate) wind farm clusters *****
 # - for different objectives and with different design approaches
 # - Based on TopFarm optimization platform, using the gradient-based SGD solver
@@ -22,11 +23,11 @@
 # 9. Bruno Nguyen (RWE)
 # 10. Pietro Bortolotti (NREL)
 # 11. P.J. Stanley (Shell)
-# 12. Sebastian Sanchez Perez Moreno
+# 12. Sebastian Sanchez Perez Moreno (Shell)
 #
 # Project lead and advisor:
 # 13. Christopher J. Bay (NREL)
-
+#
 #%% Preamble
 import os
 os.environ["OPENMDAO_WORKDIR"] = os.path.join(os.path.dirname(__file__), ".openmdao_out")
@@ -61,6 +62,7 @@ from ssms.curve_fit_monopile import trainQLS
 from optiwindnet.augmentation import poisson_disc_filler
 from topfarm.constraint_components.boundary import MultiWFBoundaryConstraint, BoundaryType
 from RecordFunc import create_recorder, record_cable_metrics, record_main_metrics_multisub, record_main_metrics_singlesub, record_results_constraints
+from functools import partial
 #
 #%% INPUTS
 # General inputs
@@ -314,7 +316,11 @@ def opt_cabling(x=None,y=None,Sx=None,Sy=None,cables=None):
 
 #%% Objective function
 def lcoe_func(x, y, **kwargs):
-    global metrics_recorder, aep, cable_cost, dcable_cost, mp_cost, dmp_cost, cable_cost_n, cable_u_n, cable_v_n, cable_type_n, mp_cost_n, wd_current, ws_current, Time
+    # 0.) Extract relevant parameters from kwargs
+    metrics_recorder = kwargs["metrics_recorder"]
+    cable_cost_n = kwargs["cable_cost_n"]
+    mp_cost_n = kwargs["mp_cost_n"]
+    #
     # 1.) aep
     if sample:
         wd_current, ws_current = sampling()
@@ -372,8 +378,17 @@ def lcoe_func(x, y, **kwargs):
         record_main_metrics_singlesub(metrics_recorder, opt_nr, aep, x, y, mp_cost, cable_cost, lcoe,
             curzone, nb, nnb, wf, tur_nr, cable_cost_n, mp_cost_n,
             npv, capex, LP, CRF, OpexAnnual)
-    # for global variable
-    aep = aep.isel(wt=slice(0,len(x))).sum().item()
+    #
+    # 5.) Store results into kwargs that need to be handed over to derivative function  
+    kwargs["aep"]["value"] = aep.isel(wt=slice(0,len(x))).sum().item()
+    kwargs["cable_cost"]["value"] = cable_cost
+    kwargs["dcable_cost"]["value"] = dcable_cost
+    kwargs["mp_cost"]["value"] = mp_cost
+    kwargs["dmp_cost"]["value"] = dmp_cost
+    kwargs["wd_current"]["value"] = wd_current
+    kwargs["ws_current"]["value"] = ws_current
+    kwargs["Time"]["value"] = Time
+
     if obj == 'lcoe':
         return lcoe # $/MWh
     elif obj == 'aep':
@@ -392,7 +407,16 @@ def get_depth_grads(x, y):
     return np.array(grads)
 
 def lcoe_jac(x, y, **kwargs):
-    global aep, cable_cost, dcable_cost, mp_cost, dmp_cost, wd_current, ws_current, Time
+    # 0.) Extract relevant parameters from kwargs
+    aep = kwargs["aep"]["value"]
+    cable_cost = kwargs["cable_cost"]["value"]
+    dcable_cost = kwargs["dcable_cost"]["value"]
+    mp_cost = kwargs["mp_cost"]["value"]
+    dmp_cost = kwargs["dmp_cost"]["value"]
+    wd_current = kwargs["wd_current"]["value"]
+    ws_current = kwargs["ws_current"]["value"]
+    Time = kwargs["Time"]["value"]
+    #
     # 1.) aep
     if nf:
         daep = wake_model.aep_gradients(gradient_method=autograd, wrt_arg=['x', 'y'], x=np.concatenate((x,xn)), y=np.concatenate((y,yn)), ws=ws_current, TI=TI, wd=wd_current, time=Time)[:tur_nr[wf[curzone]],:tur_nr[wf[curzone]]] * 1e3
@@ -749,10 +773,29 @@ elif Mode == 'competitive':
                                              'curzone':curzone,'obj':obj,'Sequence':Sequence,'x0':x0,'y0':y0,'sample':sample,'samps':samps,'SepCabling':SepCabling,'Sx':Sx,'Sy':Sy,'depths':depths,'masses':masses,
                                              'CableSolver':CableSolver,'tl_metaheuristic':tl_metaheuristic,'tl_milp':tl_milp,'mip_gap':mip_gap}) 
         
+        # Prepare (mostly mutable) kwargs that need to be passed throughout optimization and from lcoe to lcoe gradient function
+        extra_vars = dict(
+            metrics_recorder=metrics_recorder,
+            aep={"value": None},
+            cable_cost={"value": None},
+            dcable_cost={"value": None},
+            mp_cost={"value": None},
+            dmp_cost={"value": None},
+            cable_cost_n=cable_cost_n,
+            mp_cost_n=mp_cost_n,
+            wd_current={"value": None},
+            ws_current={"value": None},
+            Time={"value": None}
+        )
+        
+        # define cost and gradient function with handed over extra_vars
+        cost_func = partial(lcoe_func, **extra_vars)
+        cost_grad_func = partial(lcoe_jac, **extra_vars)
+        
         # Optimization Setup
         tf = TopFarmProblem(
                 design_vars = {'x':x0, 'y':y0},         
-                cost_comp = CostModelComponent(input_keys=['x','y'], n_wt=tur_nr[wf[Sequence[i]]], cost_function=lcoe_func, objective=True, cost_gradient_function=lcoe_jac, maximize=maximize),
+                cost_comp = CostModelComponent(input_keys=['x','y'], n_wt=tur_nr[wf[Sequence[i]]], cost_function=cost_func, objective=True, cost_gradient_function=cost_grad_func, maximize=maximize),
                 constraints = DistanceConstraintAggregation(constraint_comp, tur_nr[wf[Sequence[i]]], min_spacing_m, windTurbines), 
                 driver = EasySGDDriver(maxiter=maxiter, learning_rate=learning_rate, speedupSGD=True, sgd_thresh=sgd_thresh),
                 plot_comp = plot_comp)
