@@ -66,9 +66,10 @@ from functools import partial
 #
 #%% INPUTS
 # General inputs
-Mode = 'competitive'                    # 'cooperative' or 'competitive' or 'evaluate_recorder' or 'evaluate_multiter' or 'CompareCabling' or 'evaluate_layout'
+Mode = 'cooperative'                    # 'cooperative' or 'competitive' or 'evaluate_recorder' or 'evaluate_multiter' or 'CompareCabling' or 'evaluate_layout'
+seed = 2                                # random np seed for initial layout configuration
 Continue = False                        # set to True if you give foregoing metrics_recorder to continue optimization
-File = 'test'                           # define name of files that is stored or loaded
+File = 'test_s' + str(seed)             # define name of files that is stored or loaded
 Sequence = ['north','mid','south']*4    # define sequence of zones for sequential design
 CableSolver = 'MetaHeuristic'           # 'Heuristic', 'MetaHeuristic', 'MILP_cplex', 'MILP_ortools' or 'MILP_gurobi'
 Model = 'turbopark'                     # 'jensen', 'gauss' or 'turbopark'
@@ -79,7 +80,7 @@ plot_postpro = True                     # True or False: plot and store layouts 
 plot_each = 50                          # define in which interval a plot should be made
 d_RD = 6                                # min spacing distance in rotor diameters
 step = 10                               # at each "step" iterations, the full wind rose is recalculated in postprocessing (when sampling is used during opt)
-seed = 2                                # random np seed for initial layout configuration
+
 
 # plot lims
 xlim = None                             # specify xlim for convergence plot or put None
@@ -616,7 +617,7 @@ def postprocess_recorder(data):
 #%% Cooperative design
 if Mode == 'cooperative':
     Sequence = ['north','mid','south']
-    plot_folder = "Figures//Figures_cooperative"
+    plot_folder = "Figures//" + File
     # Initial Layout
     x0, y0 = np.concatenate(tuple(coords[name] for name in wf)).T
     # Constraint
@@ -655,10 +656,19 @@ if Mode == 'cooperative':
                                          'CableSolver':CableSolver,'tl_metaheuristic':tl_metaheuristic,'tl_milp':tl_milp,'mip_gap':mip_gap}) 
     [metrics_recorder[key].append(None) for key in ["sgd_constraint_violation", "tur_dist_violation", "bound_violation"]]   # first run: no optimization
     
+    # Prepare (mostly mutable) kwargs that need to be passed throughout optimization and from lcoe to lcoe gradient function
+    extra_vars = dict(metrics_recorder=metrics_recorder, aep={"value": None}, cable_cost={"value": None}, dcable_cost={"value": None},
+        mp_cost={"value": None}, dmp_cost={"value": None}, cable_cost_n=cable_cost_n, mp_cost_n=mp_cost_n, wd_current={"value": None},
+        ws_current={"value": None}, Time={"value": None})
+    
+    # define cost and gradient function with handed over extra_vars
+    cost_func = partial(lcoe_func, **extra_vars)
+    cost_grad_func = partial(lcoe_jac, **extra_vars)
+        
     # Optimization setup
     tf = TopFarmProblem(
             design_vars = {'x':x0, 'y':y0},         
-            cost_comp = CostModelComponent(input_keys=['x','y'], n_wt=sum(tur_nr), cost_function=lcoe_func, objective=True, cost_gradient_function=lcoe_jac, maximize=maximize),
+            cost_comp = CostModelComponent(input_keys=['x','y'], n_wt=sum(tur_nr), cost_function=cost_func, objective=True, cost_gradient_function=cost_grad_func, maximize=maximize),
             constraints = DistanceConstraintAggregation(joint_boundaries, sum(tur_nr), min_spacing_m, windTurbines), 
             driver = EasySGDDriver(maxiter=maxiter, learning_rate=learning_rate, speedupSGD=True, sgd_thresh=sgd_thresh),
             plot_comp = plot_comp
@@ -708,7 +718,7 @@ elif Mode == 'competitive':
     sample = True
     SepCabling = False
     boundplot = list(boundaries.values())
-    plot_folder = "Figures//Figures_" + ''.join([entry[0] for entry in Sequence])
+    plot_folder = "Figures//" + File
         
     # go through each zone as specified in Sequenc
     for i in loop_range:
@@ -774,19 +784,9 @@ elif Mode == 'competitive':
                                              'CableSolver':CableSolver,'tl_metaheuristic':tl_metaheuristic,'tl_milp':tl_milp,'mip_gap':mip_gap}) 
         
         # Prepare (mostly mutable) kwargs that need to be passed throughout optimization and from lcoe to lcoe gradient function
-        extra_vars = dict(
-            metrics_recorder=metrics_recorder,
-            aep={"value": None},
-            cable_cost={"value": None},
-            dcable_cost={"value": None},
-            mp_cost={"value": None},
-            dmp_cost={"value": None},
-            cable_cost_n=cable_cost_n,
-            mp_cost_n=mp_cost_n,
-            wd_current={"value": None},
-            ws_current={"value": None},
-            Time={"value": None}
-        )
+        extra_vars = dict(metrics_recorder=metrics_recorder, aep={"value": None}, cable_cost={"value": None}, dcable_cost={"value": None},
+            mp_cost={"value": None}, dmp_cost={"value": None}, cable_cost_n=cable_cost_n, mp_cost_n=mp_cost_n, wd_current={"value": None},
+            ws_current={"value": None}, Time={"value": None})
         
         # define cost and gradient function with handed over extra_vars
         cost_func = partial(lcoe_func, **extra_vars)
