@@ -70,7 +70,7 @@ def run_optimization(seed):
     #%% INPUTS
     # General inputs
     Mode = 'cooperative'                    # 'cooperative' or 'competitive' or 'evaluate_recorder' or 'evaluate_multiter' or 'CompareCabling' or 'evaluate_layout'
-    seed = 2                                # random np seed for initial layout configuration
+    # seed = 2                                # random np seed for initial layout configuration
     Continue = False                        # set to True if you give foregoing metrics_recorder to continue optimization
     File = 'test_s' + str(seed)             # define name of files that is stored or loaded
     Sequence = ['north','mid','south']*4    # define sequence of zones for sequential design
@@ -80,9 +80,9 @@ def run_optimization(seed):
     obj = 'lcoe'                            # 'lcoe' or 'aep'
     plot_iter = True                        # True or False: plot and store layouts during optimization each plot_each iterations
     plot_postpro = True                     # True or False: plot and store layouts during postprocessing (how often is linked to step)
-    plot_each = 50                          # define in which interval a plot should be made
+    plot_each = 100                         # define in which interval a plot should be made
     d_RD = 6                                # min spacing distance in rotor diameters
-    step = 10                               # at each "step" iterations, the full wind rose is recalculated in postprocessing (when sampling is used during opt)
+    step = 10000                            # at each "step" iterations, the full wind rose is recalculated in postprocessing (when sampling is used during opt)
     
     
     # plot lims
