@@ -734,7 +734,7 @@ def run_script(seed=2):
         # go through each zone as specified in Sequenc
         for i in loop_range:
             now = datetime.now()
-            print('Evaluate zone ' + str(i+1) + '/' + str(len(Sequence)) + '. Time: ' + now.strftime("%H:%M:%S"))
+            print('Evaluate zone ' + str(i+1) + '/' + str(len(Sequence)) + ' for seed ' + str(seed) + '. Time: ' + now.strftime("%H:%M:%S"))
             opt_nr = i+1
             curzone = Sequence[i]
             # Initial Layout
