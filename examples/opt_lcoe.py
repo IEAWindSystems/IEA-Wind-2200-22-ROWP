@@ -1,3 +1,33 @@
+#%%
+# ***** Routine to optimize (or evaluate) wind farm clusters *****
+# - for different objectives and with different design approaches
+# - Based on TopFarm optimization platform, using the gradient-based SGD solver
+# - Combination of AEP, monopile and cable costs assessment to determine location-dependent LCOE of a wind farm (cluster) considering neighbouring wind farm impacts
+# 
+# Developed through an international collaborative effort in IEA Wind Task 55 "REFWIND"
+# 
+# Main developer:
+# 1. Samuel Kainz (Technical University of Munich, TUM). Contact: samuel.kainz@tum.de
+#
+# Co-developers:
+# 2. Julian Quick (Denmark Technical University, DTU)
+# 3. Amir Arasteh (DTU)
+# 4. Mauricio Souza de Alencar (DTU)
+#
+# Advisors:
+# 5. Carlo L. Bottasso (TUM)
+# 6. Rafael Valotta Rodrigues (University of Massachusetts Boston)
+# 7. Pierre-Elouan Réthoré (DTU)
+# 8. Abhinav Kapila (RWE)
+# 9. Bruno Nguyen (RWE)
+# 10. Pietro Bortolotti (NREL)
+# 11. P.J. Stanley (Shell)
+# 12. Sebastian Sanchez Perez Moreno
+#
+# Project lead and advisor:
+# 13. Christopher J. Bay (NREL)
+
+#%% Preamble
 import os
 os.environ["OPENMDAO_WORKDIR"] = os.path.join(os.path.dirname(__file__), ".openmdao_out")
 import numpy as np
@@ -25,27 +55,26 @@ from py_wake.turbulence_models import CrespoHernandez
 import windIO
 from pathlib import Path
 from scipy.interpolate import RegularGridInterpolator
-from optiwindnet.api import WindFarmNetwork, ModelOptions, MILPRouter, HGSRouter, EWRouter
+from optiwindnet.api import WindFarmNetwork, MILPRouter, HGSRouter, EWRouter
 from ssms.CalculateMass import CalculateMass
 from ssms.curve_fit_monopile import trainQLS
 from optiwindnet.augmentation import poisson_disc_filler
-from shapely.geometry import Point, Polygon
 from topfarm.constraint_components.boundary import MultiWFBoundaryConstraint, BoundaryType
 from RecordFunc import create_recorder, record_cable_metrics, record_main_metrics_multisub, record_main_metrics_singlesub, record_results_constraints
 #
 #%% INPUTS
 # General inputs
-File = 'res_coop_6D_S4_processed'
-Sequence = ['north','mid','south']*4    # define sequence of zones for sequential design
-Mode = 'cooperative'                    # 'cooperative' or 'competitive' or 'evaluate_recorder' or 'evaluate_multiter' or 'CompareCabling' or 'evalute_layout'
-CableSolver = 'MetaHeuristic'           # 'Heuristic', 'MetaHeuristic', 'MILP_cplex' or 'MILP_ortools'
+Mode = 'competitive'                    # 'cooperative' or 'competitive' or 'evaluate_recorder' or 'evaluate_multiter' or 'CompareCabling' or 'evaluate_layout'
 Continue = False                        # set to True if you give foregoing metrics_recorder to continue optimization
+File = 'test'                           # define name of files that is stored or loaded
+Sequence = ['north','mid','south']*4    # define sequence of zones for sequential design
+CableSolver = 'MetaHeuristic'           # 'Heuristic', 'MetaHeuristic', 'MILP_cplex', 'MILP_ortools' or 'MILP_gurobi'
 Model = 'turbopark'                     # 'jensen', 'gauss' or 'turbopark'
 tur_nr = [33,33,34]                     # Desired turbine number in optimized farm, from north to south!
 obj = 'lcoe'                            # 'lcoe' or 'aep'
-plot_iter = False                       # True or False: plot and store layouts during optimization each plot_each iterations
+plot_iter = True                        # True or False: plot and store layouts during optimization each plot_each iterations
 plot_postpro = True                     # True or False: plot and store layouts during postprocessing (how often is linked to step)
-plot_each = 1                           # define in which interval a plot should be made
+plot_each = 50                          # define in which interval a plot should be made
 d_RD = 6                                # min spacing distance in rotor diameters
 step = 10                               # at each "step" iterations, the full wind rose is recalculated in postprocessing (when sampling is used during opt)
 seed = 2                                # random np seed for initial layout configuration
@@ -57,7 +86,7 @@ ylim2 = None                            # specify ylim for axis2 (penalty) for c
 ax2_ystep = None                        # specify tick step for axis2 or put None
 
 # SGD
-maxiter = 5000                          # maximum nr of iterations for SGD opt
+maxiter = 3000                          # maximum nr of iterations for SGD opt
 sgd_thresh = 0.02                       # SGD threshold
 
 # Monopile optimization
@@ -66,16 +95,14 @@ MP_ref = 1                              # reference turbine type for monopile ma
 # lcoe parameters
 d = 0.0661                              # [-] discount rate, from NREL CoE 2024 report
 life = 25                               # years, lifetime
-RP = 22                                 # MW
-D = 284                                 # m
-HH = 170                                # m
-HTrans = 15                             # m
-WaveHeight = 2.52                       # m
-WavePeriod = 5.45                       # s
-WindSpeed = 9.924                       # m/s ToDo: verfiy it is average wind speed
 capex = 9.6734e7 * 0.924                # €2024 per turbine, excl. Monopile and cabling, from NREL COE Report 2024, converted to € with 2024 average exchange rate
 OpexAnnual = 2.97e6 * 0.924             # €2024 per turbine, annual OPEX,from NREL COE Report 2024, converted to € with 2024 average exchange rate
 LP = 0                                  # $2010 per turbine, liquidation proceeds, from DETECT for HKN scaled (22MW turbines)
+
+# mass surrogate
+PlatformHeight = 15                     # Platform height [m]
+WaveHeight = 2.52                       # Significant Wave Height [m]
+WavePeriod = 5.45                       # Significiant Wave Period [s]
 
 # Cable data [cross section, capacity, price]
 # Define cable properties using a list of dictionaries
@@ -119,11 +146,11 @@ p = farm_dat['turbines']['performance']['power_curve']['power_values']
 p_ws = farm_dat['turbines']['performance']['power_curve']['power_wind_speeds']
 ct = farm_dat['turbines']['performance']['Ct_curve']['Ct_values']
 ct_ws = farm_dat['turbines']['performance']['Ct_curve']['Ct_wind_speeds']
-int_speeds = np.linspace(np.min(np.min([p_ws, ct_ws])), np.max(np.max([p_ws, ct_ws])), 10000)
-ps_int = np.interp(int_speeds, p_ws, p)
-cts_int = np.interp(int_speeds, ct_ws, ct)
+# int_speeds = np.linspace(np.min(np.min([p_ws, ct_ws])), np.max(np.max([p_ws, ct_ws])), 10000)
+# ps_int = np.interp(int_speeds, p_ws, p)
+# cts_int = np.interp(int_speeds, ct_ws, ct)
 windTurbines = WindTurbine(name=farm_dat['turbines']['name'], diameter=rd, hub_height=hh, 
-                      powerCtFunction=PowerCtTabular(int_speeds, ps_int, power_unit='W', ct=cts_int))
+                      powerCtFunction=PowerCtTabular(p_ws, p, power_unit='W', ct=ct))
 
 # wake model
 if Model == 'jensen':
@@ -197,11 +224,6 @@ def depth_interp(x, y):
 # Note: a mass surrogate model only with 20MW results is built. Approximation of the 22MW machine.
 trainQLS()
 depths = np.linspace(np.min(-Z),np.max(-Z),20)
-ph = 15     # Platform height [m]
-swh = 2.52  # Significant Wave Height [m]
-swp = 5.45  # Significiant Wave Period [s]
-# P_interpolator = interp1d(np.cumsum(sum(P)), ws, kind='linear')  # interpolator to get mean wind sped (@50% probability)
-# V_ave = P_interpolator(0.5).tolist()
 import scipy.special as sp
 def mean_wind_speed(A, k):
     return A * sp.gamma(1 + 1/k)
@@ -211,7 +233,7 @@ for i in range(len(wd)):
 V_ave = np.sum(np.array(V_ave) * np.array(freq['data']))
 masses = []
 for z in depths:
-   cur_mass = CalculateMass(D=rd, HTrans=HTrans, HHub=hh, WaterDepth=z, WaveHeight=swh, WavePeriod=swp, WindSpeed=V_ave, IP_item=1)
+   cur_mass = CalculateMass(D=rd, HTrans=PlatformHeight, HHub=hh, WaterDepth=z, WaveHeight=WaveHeight, WavePeriod=WavePeriod, WindSpeed=V_ave, IP_item=1)
    masses.append(cur_mass[0][0])
 # add transition piece (100t, from 22MW report)
 masses = [x + 100000 for x in masses]
@@ -254,8 +276,6 @@ if plot_iter and (Mode == 'cooperative' or Mode == 'competitive'):
 nf = False
 xn = []
 yn = []
-x_if = [] # infeasible cabling layouts
-y_if = []
 cable_cost_n = [0,0]
 mp_cost_n = [0,0]
 SepCabling = False
@@ -307,7 +327,6 @@ def lcoe_func(x, y, **kwargs):
         aep = wake_model(x=np.concatenate((x,xn)), y=np.concatenate((y,yn)), wd=wd_current, ws=ws_current, TI=TI, time=Time).aep() * 1e3
     else:
         aep = wake_model(x=x, y=y, wd=wd_current, ws=ws_current, TI=TI, time=Time).aep() * 1e3
-        # aep = xr.DataArray(np.sum(aep, axis=(1, 2)), dims=["wt"])
     #
     # 2.) monopile costs
     depths = depth_interp(x, y)
@@ -342,7 +361,6 @@ def lcoe_func(x, y, **kwargs):
     # 4.) lcoe
     CRF = d / (1 - (1 + d) ** -life)
     npv = (capex*len(x) + np.sum(mp_cost) + cable_cost + LP*len(x)) * CRF + OpexAnnual*len(x)
-    # lcoe = npv / np.sum(aep).item()
     lcoe = npv / aep.isel(wt=slice(0,len(x))).sum().item()
     #
     # 5. Record the missing metrics
@@ -376,7 +394,6 @@ def get_depth_grads(x, y):
 def lcoe_jac(x, y, **kwargs):
     global aep, cable_cost, dcable_cost, mp_cost, dmp_cost, wd_current, ws_current, Time
     # 1.) aep
-    # wd = np.arange(0, 360, 1)
     if nf:
         daep = wake_model.aep_gradients(gradient_method=autograd, wrt_arg=['x', 'y'], x=np.concatenate((x,xn)), y=np.concatenate((y,yn)), ws=ws_current, TI=TI, wd=wd_current, time=Time)[:tur_nr[wf[curzone]],:tur_nr[wf[curzone]]] * 1e3
     else:
@@ -397,6 +414,14 @@ def lcoe_jac(x, y, **kwargs):
         return daep
 
 # Verify gradients
+# metrics_recorder = create_recorder(Sequence)
+# nb = []
+# nnb = []
+# curzone = 'north'
+# x0 = [550507.3,551004.3,552353.3,551501.3,552850.3,550010.3,552353.3,553915.3,553986.3,553986.3,559453.3,553986.3,551501.3,554057.3,555619.3,555619.3,555619.3,555619.3,556684.3,555690.3,555619.3,555619.3,555619.3,555690.3,557181.3,557749.3,558033.3,558104.3,559311.3,557465.3,557394.3,558033.3,558885.3]
+# y0 = [5841236.0,5842585.0,5836621.0,5837686.0,5841591.0,5839603.0,5844218.0,5846064.0,5836692.0,5839745.0,5849898.0,5844076.0,5839319.0,5834491.0,5833639.0,5835485.0,5836834.0,5839035.0,5834704.0,5841804.0,5843934.0,5846135.0,5848123.0,5832716.0,5849969.0,5840242.0,5842088.0,5843934.0,5848265.0,5848123.0,5838325.0,5850963.0,5846135.0]
+# Sx = [Subs_x[wf[curzone]]]
+# Sy = [Subs_y[wf[curzone]]]
 # lcoe = lcoe_func(x0, y0)
 # lcoe_grad = lcoe_jac(x0, y0)
 # def wrap_lcoe(s): return lcoe_func(*np.split(s, 2))
