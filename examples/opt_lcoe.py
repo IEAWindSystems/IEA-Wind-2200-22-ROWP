@@ -7,10 +7,8 @@
 # 
 # Developed through an international collaborative effort in IEA Wind Task 55 "REFWIND"
 # 
-# Main developer:
+# Developers:
 # 1. Samuel Kainz (Technical University of Munich, TUM). Contact: samuel.kainz@tum.de
-#
-# Co-developers:
 # 2. Julian Quick (Denmark Technical University, DTU)
 # 3. Amir Arasteh (DTU)
 # 4. Mauricio Souza de Alencar (DTU)
@@ -115,8 +113,8 @@ def run_script(seed=2):
     
     # mass surrogate
     PlatformHeight = 15                     # Platform height [m]
-    WaveHeight = 2.52                       # Significant Wave Height [m]
-    WavePeriod = 5.45                       # Significiant Wave Period [s]
+    WaveHeight = 1.4                        # Significant Wave Height [m], taken from HKW metocean report p. 183
+    WavePeriod = 6.75                       # Associated Wave Period [s]
     
     # Cable data [cross section, capacity, price]
     # Define cable properties using a list of dictionaries
