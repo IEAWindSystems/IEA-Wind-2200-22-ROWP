@@ -301,6 +301,7 @@ def run_script(seed=2):
     for font in font_manager.findSystemFonts(font_dir):
         font_manager.fontManager.addfont(font)
     plt.rcParams["font.family"] = "Serif"
+    plt.rcParams['svg.fonttype'] = 'path'
     #
     #%% Function to create the random sampling of wind speed and wind directions
     def sampling():
@@ -402,7 +403,7 @@ def run_script(seed=2):
         if obj == 'lcoe':
             return lcoe # $/MWh
         elif obj == 'aep':
-            return aep
+            return aep.isel(wt=slice(0,len(x))).sum().item()
     
     #%% Objective gradient function
     def wrap_depth(s): 
@@ -471,8 +472,13 @@ def run_script(seed=2):
     coords = {name: poisson_disc_filler(tur_nr[wf[name]], min_dist=0.8*min_spacing_m, BorderC=boundaries[name], seed=seed)
               for name in wf}
     
-    #%% Recorder
+    #%% Recorder + kwargs
     metrics_recorder = create_recorder(Sequence)
+    
+    # Prepare (mostly mutable) kwargs that need to be passed throughout optimization and from lcoe to lcoe gradient function
+    extra_vars = dict(metrics_recorder=metrics_recorder, aep={"value": None}, cable_cost={"value": None}, dcable_cost={"value": None},
+        mp_cost={"value": None}, dmp_cost={"value": None}, cable_cost_n=cable_cost_n, mp_cost_n=mp_cost_n, wd_current={"value": None},
+        ws_current={"value": None}, Time={"value": None})
     
     #%% Convergence plotting script
     def plot_convergence(mr=None,item=None,plotstr=None,obj=1,overall=0,optfat=0,feas=0,reg=1):
@@ -595,7 +601,12 @@ def run_script(seed=2):
                     mp_cost_n[j]= data['mp_cost_' + zone][idx]
             else:
                 nf = False
-    
+                
+            # update kwargs
+            extra_vars['cable_cost_n'] = cable_cost_n
+            extra_vars['mp_cost_n'] = mp_cost_n
+            
+            # other
             boundplot = list(boundaries.values())
             plot_folder = "Figures//Figures_processed_" + File
             opt_nr = data['opt_nr'][idx]
@@ -608,7 +619,7 @@ def run_script(seed=2):
                 opt_nr_check = opt_nr
             #
             # run
-            lcoe_func(x0,y0)
+            lcoe_func(x0,y0,**extra_vars)
             # plot
             if plot_postpro:
                 plt.figure()
@@ -664,11 +675,6 @@ def run_script(seed=2):
                                              'curzone':curzone,'obj':obj,'Sequence':Sequence,'x0':x0,'y0':y0,'sample':sample,'samps':samps,'SepCabling':SepCabling,'Sx':Sx,'Sy':Sy,'depths':depths,'masses':masses,
                                              'CableSolver':CableSolver,'tl_metaheuristic':tl_metaheuristic,'tl_milp':tl_milp,'mip_gap':mip_gap}) 
         [metrics_recorder[key].append(None) for key in ["sgd_constraint_violation", "tur_dist_violation", "bound_violation"]]   # first run: no optimization
-        
-        # Prepare (mostly mutable) kwargs that need to be passed throughout optimization and from lcoe to lcoe gradient function
-        extra_vars = dict(metrics_recorder=metrics_recorder, aep={"value": None}, cable_cost={"value": None}, dcable_cost={"value": None},
-            mp_cost={"value": None}, dmp_cost={"value": None}, cable_cost_n=cable_cost_n, mp_cost_n=mp_cost_n, wd_current={"value": None},
-            ws_current={"value": None}, Time={"value": None})
         
         # define cost and gradient function with handed over extra_vars
         cost_func = partial(lcoe_func, **extra_vars)
@@ -794,10 +800,9 @@ def run_script(seed=2):
                                                  'curzone':curzone,'obj':obj,'Sequence':Sequence,'x0':x0,'y0':y0,'sample':sample,'samps':samps,'SepCabling':SepCabling,'Sx':Sx,'Sy':Sy,'depths':depths,'masses':masses,
                                                  'CableSolver':CableSolver,'tl_metaheuristic':tl_metaheuristic,'tl_milp':tl_milp,'mip_gap':mip_gap}) 
             
-            # Prepare (mostly mutable) kwargs that need to be passed throughout optimization and from lcoe to lcoe gradient function
-            extra_vars = dict(metrics_recorder=metrics_recorder, aep={"value": None}, cable_cost={"value": None}, dcable_cost={"value": None},
-                mp_cost={"value": None}, dmp_cost={"value": None}, cable_cost_n=cable_cost_n, mp_cost_n=mp_cost_n, wd_current={"value": None},
-                ws_current={"value": None}, Time={"value": None})
+            # update kwargs
+            extra_vars['cable_cost_n'] = cable_cost_n
+            extra_vars['mp_cost_n'] = mp_cost_n
             
             # define cost and gradient function with handed over extra_vars
             cost_func = partial(lcoe_func, **extra_vars)
@@ -1026,7 +1031,7 @@ def run_script(seed=2):
         curzone = zone_eva
         Sx = [Subs_x[wf[curzone]]]
         Sy = [Subs_y[wf[curzone]]]
-        res = lcoe_func(x_eva,y_eva)
+        res = lcoe_func(x_eva,y_eva,**extra_vars)
         
         plot_folder = "Figures//FinalResult"
         boundplot = list(boundaries.values())
