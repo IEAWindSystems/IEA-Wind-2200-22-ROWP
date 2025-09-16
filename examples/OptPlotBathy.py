@@ -79,6 +79,7 @@ class XYPlotCompBathym(ExplicitComponent):
         self.ploteach = ploteach
         self.iter_nr = iter_nr
         self.paper = paper
+        self.FS = 8
     @property
     def ax(self):
         return self._ax or plt.gca()
@@ -139,10 +140,10 @@ class XYPlotCompBathym(ExplicitComponent):
         colorbar_exists = any(isinstance(ax, plt.Axes) and ax.get_label() == '<colorbar>' for ax in fig.axes)
         if not colorbar_exists:
             cb = fig.colorbar(CS)
-            cb.set_label('Depth [m]',fontsize=8)
+            cb.set_label('Depth [m]',fontsize=self.FS)
             cb.ax.invert_yaxis()
             cb.set_ticks(np.arange(21,36,2))
-            cb.ax.tick_params(labelsize=7)
+            cb.ax.tick_params(labelsize=self.FS-1)
 
 #     def plot_boundary(self):
 #         b = np.r_[self.xy_boundary[:], self.xy_boundary[:1]]
@@ -227,7 +228,7 @@ class XYPlotCompBathym(ExplicitComponent):
             by = b[i][:,1]
             bx = np.append(bx,bx[0])
             by = np.append(by,by[0])
-            if i == i_opt:
+            if self.optimize and i == i_opt:
                 polygon = Polygon(np.c_[bx, by], closed=True, facecolor='blueviolet', edgecolor='none', alpha=0.17)
                 self.ax.add_patch(polygon)
             if i == 0:
@@ -290,7 +291,7 @@ class XYPlotCompBathym(ExplicitComponent):
                     title += " \n" + obj + ' ' + zone + " = %.2f %s (%+.2f%%)" % (self.metrics_recorder[self.obj + '_' + zone][-1] / divider, unit, (self.metrics_recorder[self.obj + '_' + zone][-1] - self.metrics_recorder[self.obj + '_' + zone][next(i for i, value in enumerate(self.metrics_recorder[self.obj + '_' + zone]) if value != 0)]) / (self.metrics_recorder[self.obj + '_' + zone][next(i for i, value in enumerate(self.metrics_recorder[self.obj + '_' + zone]) if value != 0)]) * 100)
                 else:
                     title += " \n" + obj + " " + zone + " = - " + unit + " (-%)"
-        self.ax.set_title(title,fontsize=8)
+        self.ax.set_title(title,fontsize=self.FS)
         
     def get_initial(self):
         rec = self.problem.recorder
@@ -341,20 +342,21 @@ class XYPlotCompBathym(ExplicitComponent):
                 self.plot_nb_spacing(self.Xn,self.Yn)
             
             self.set_title()
-            self.ax.legend(loc='upper left',fontsize=7)
+            self.ax.legend(loc='upper left',fontsize=self.FS-1)
             
             self.ax.grid(alpha=0.6)
-            self.ax.tick_params(axis='both', which='major', labelsize=8)
+            self.ax.tick_params(axis='both', which='major', labelsize=self.FS-1)
             
             # Format axes to display in kilometers
             def meters_to_kilometers(x, _):
                 return f'{x / 1000:.0f}'
             plt.gca().xaxis.set_major_formatter(FuncFormatter(meters_to_kilometers))
             plt.gca().yaxis.set_major_formatter(FuncFormatter(meters_to_kilometers))
-            self.ax.set_ylabel('Northing [km]',fontsize=9)
-            self.ax.set_xlabel('Easting [km]',fontsize=9)
+            self.ax.set_ylabel('Northing [km]',fontsize=self.FS)
+            self.ax.set_xlabel('Easting [km]',fontsize=self.FS)
             self.ax.set_xlim([533200,562500])
             self.ax.set_ylim([5813300,5852700])
+            # self.ax.tick_params(labelsize=self.FS-1)
             # self.ax.set_xlim([525700,567000])
             # self.ax.set_ylim([5804500,5862500])
             
