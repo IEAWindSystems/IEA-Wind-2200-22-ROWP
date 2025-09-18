@@ -273,7 +273,8 @@ Routers = {'Heuristic': EWRouter(),
            'MILP_cplex': MILPRouter(solver_name='cplex', time_limit=tl_milp, mip_gap=mip_gap, verbose=False),
            'MILP_ortools': MILPRouter(solver_name='ortools', time_limit=tl_milp, mip_gap=mip_gap, verbose=False),
            'MILP_gurobi': MILPRouter(solver_name='gurobi', time_limit=tl_milp, mip_gap=mip_gap, verbose=False)}
-cables = np.array([[c["capacity_NrT"], c["cost_€_m"]] for c in cable_specs])
+cables = np.array([(int(c["capacity_NrT"]), c["cost_€_m"]) for c in cable_specs],
+    dtype=[('capacity', int), ('cost', float)])
 cables_plot = np.array([[c["diameter_mm2"], c["capacity_NrT"], c["cost_€_m"]] for c in cable_specs])
 
 # results and figure folders
@@ -729,6 +730,7 @@ elif Mode == 'competitive':
         loop_range = range(6,len(Sequence))
     else:
         loop_range = range(len(Sequence))
+        
     # general options
     sample = True
     SepCabling = False
