@@ -56,7 +56,6 @@ from py_wake import NOJ, Nygaard_2022
 from py_wake.literature import Bastankhah_PorteAgel_2014
 from py_wake.rotor_avg_models import RotorCenter
 from topfarm.cost_models.cost_model_wrappers import CostModelComponent
-from topfarm.easy_drivers import EasySGDDriver
 from topfarm import TopFarmProblem
 from topfarm.constraint_components.boundary import XYBoundaryConstraint, InclusionZone
 from topfarm.constraint_components.constraint_aggregation import DistanceConstraintAggregation
@@ -71,6 +70,7 @@ from ssms.CalculateMass import CalculateMass
 from ssms.curve_fit_monopile import trainQLS
 from OptPlotBathy import XYPlotCompBathym
 from RecordFunc import create_recorder, record_cable_metrics, record_main_metrics_multisub, record_main_metrics_singlesub, record_results_constraints
+from scripts.easy_drivers_IEA import EasySGDDriver
 #
 #%% Main script to run
 # def run_script(seed=2):
@@ -273,8 +273,7 @@ Routers = {'Heuristic': EWRouter(),
            'MILP_cplex': MILPRouter(solver_name='cplex', time_limit=tl_milp, mip_gap=mip_gap, verbose=False),
            'MILP_ortools': MILPRouter(solver_name='ortools', time_limit=tl_milp, mip_gap=mip_gap, verbose=False),
            'MILP_gurobi': MILPRouter(solver_name='gurobi', time_limit=tl_milp, mip_gap=mip_gap, verbose=False)}
-cables = np.array([(int(c["capacity_NrT"]), c["cost_€_m"]) for c in cable_specs],
-    dtype=[('capacity', int), ('cost', float)])
+cables = np.array([[c["capacity_NrT"], c["cost_€_m"]] for c in cable_specs])
 cables_plot = np.array([[c["diameter_mm2"], c["capacity_NrT"], c["cost_€_m"]] for c in cable_specs])
 
 # results and figure folders
@@ -332,6 +331,10 @@ def lcoe_func(x, y, **kwargs):
     metrics_recorder = kwargs["metrics_recorder"]
     cable_cost_n = kwargs["cable_cost_n"]
     mp_cost_n = kwargs["mp_cost_n"]
+    #
+    # apply mask if sequential optimization runs (to ensure min. distance also with neighbouring turbines)
+    x = x[:len(metrics_recorder['settings'][0]['x0'])]
+    y = y[:len(metrics_recorder['settings'][0]['y0'])]
     #
     # 1.) aep
     if sample:
@@ -429,6 +432,10 @@ def lcoe_jac(x, y, **kwargs):
     ws_current = kwargs["ws_current"]["value"]
     Time = kwargs["Time"]["value"]
     #
+    # apply mask if sequential optimization runs (to ensure min. distance also with neighbouring turbines)
+    x = x[:len(metrics_recorder['settings'][0]['x0'])]
+    y = y[:len(metrics_recorder['settings'][0]['y0'])]
+    #
     # 1.) aep
     if nf:
         daep = wake_model.aep_gradients(gradient_method=autograd, wrt_arg=['x', 'y'], x=np.concatenate((x,xn)), y=np.concatenate((y,yn)), ws=ws_current, TI=TI, wd=wd_current, time=Time)[:tur_nr[wf[curzone]],:tur_nr[wf[curzone]]] * 1e3
@@ -444,6 +451,10 @@ def lcoe_jac(x, y, **kwargs):
     # 4.) lcoe
     CRF = d / (1 - (1 + d) ** -life)
     dlcoe = (CRF*(dmp_cost+dcable_cost.T)*aep - ((capex*len(x)+LP*len(x)+np.sum(mp_cost)+cable_cost)*CRF+OpexAnnual*len(x))*daep) / (aep ** 2)
+    #
+    # 5.) add dummy zeros in case of sequential optimization (--> these turbines don't move, they are just there to ensure the min. spacing constraint)
+    dlcoe = np.hstack([dlcoe, np.ones((dlcoe.shape[0], len(xn)))*0.0])
+    #
     if obj == 'lcoe':
         return dlcoe # $/MWh
     elif obj == 'aep':
@@ -803,6 +814,7 @@ elif Mode == 'competitive':
                                              'CableSolver':CableSolver,'tl_metaheuristic':tl_metaheuristic,'tl_milp':tl_milp,'mip_gap':mip_gap}) 
         
         # update kwargs
+        extra_vars['metrics_recorder'] = metrics_recorder
         extra_vars['cable_cost_n'] = cable_cost_n
         extra_vars['mp_cost_n'] = mp_cost_n
         
@@ -810,12 +822,17 @@ elif Mode == 'competitive':
         cost_func = partial(lcoe_func, **extra_vars)
         cost_grad_func = partial(lcoe_jac, **extra_vars)
         
+        # give indices of external "dummy" turbines (modified SGD driver to keep the associated variables untouched)
+        ext_ind = np.concatenate((np.arange(len(x0),len(x0)+len(xn)),               # x-indices
+                                  np.arange(2*len(x0)+len(xn),2*(len(x0)+len(xn)))  # y-indices
+                                  ))
+        
         # Optimization Setup
         tf = TopFarmProblem(
-                design_vars = {'x':x0, 'y':y0},         
-                cost_comp = CostModelComponent(input_keys=['x','y'], n_wt=tur_nr[wf[Sequence[i]]], cost_function=cost_func, objective=True, cost_gradient_function=cost_grad_func, maximize=maximize),
-                constraints = DistanceConstraintAggregation(constraint_comp, tur_nr[wf[Sequence[i]]], min_spacing_m, windTurbines), 
-                driver = EasySGDDriver(maxiter=maxiter, learning_rate=learning_rate, speedupSGD=True, sgd_thresh=sgd_thresh),
+                design_vars = {'x':np.concatenate([x0,xn]), 'y': np.concatenate([y0,yn])},         
+                cost_comp = CostModelComponent(input_keys=['x','y'], n_wt=len(np.concatenate([x0,xn])), cost_function=cost_func, objective=True, cost_gradient_function=cost_grad_func, maximize=maximize),
+                constraints = DistanceConstraintAggregation(constraint_comp, len(np.concatenate([x0,xn])), min_spacing_m, windTurbines), 
+                driver = EasySGDDriver(maxiter=maxiter, learning_rate=learning_rate, speedupSGD=True, sgd_thresh=sgd_thresh, ext_ind=ext_ind),
                 plot_comp = plot_comp)
         
         # Run
