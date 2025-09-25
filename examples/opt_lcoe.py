@@ -58,8 +58,8 @@ from py_wake.literature import Bastankhah_PorteAgel_2014
 from py_wake.rotor_avg_models import RotorCenter
 from topfarm.cost_models.cost_model_wrappers import CostModelComponent
 from topfarm import TopFarmProblem
+from topfarm.easy_drivers import EasySGDDriver
 from topfarm.constraint_components.boundary import XYBoundaryConstraint, InclusionZone
-from topfarm.constraint_components.constraint_aggregation import DistanceConstraintAggregation
 from topfarm.constraint_components.boundary import MultiWFBoundaryConstraint, BoundaryType
 #
 # ---
@@ -71,7 +71,7 @@ from ssms.CalculateMass import CalculateMass
 from ssms.curve_fit_monopile import trainQLS
 from OptPlotBathy import XYPlotCompBathym
 from RecordFunc import create_recorder, record_cable_metrics, record_main_metrics_multisub, record_main_metrics_singlesub, record_results_constraints
-from scripts.easy_drivers_IEA import EasySGDDriver
+from TopfarmAdvancedConstraints import CorrectedXYBoundaryConstraint, SpacingConstraintWithAdditionalTurbines, DistanceConstraintAggregation
 #
 #%% INPUTS
 # Parallelization
@@ -334,10 +334,6 @@ def lcoe_func(x, y, **kwargs):
     args = SimpleNamespace(**kwargs)
     metrics_recorder = kwargs["metrics_recorder"]
     #
-    # apply mask if sequential optimization runs (to ensure min. distance also with neighbouring turbines)
-    x = x[:len(metrics_recorder['current_settings'][-1]['x0'])]
-    y = y[:len(metrics_recorder['current_settings'][-1]['y0'])]
-    #
     # 1.) aep
     if args.sample:
         wd_current, ws_current = sampling()
@@ -427,10 +423,6 @@ def lcoe_jac(x, y, **kwargs):
     # 0.) Extract kwargs
     args = SimpleNamespace(**kwargs)
     #
-    # apply mask if sequential optimization runs (to ensure min. distance also with neighbouring turbines)
-    x = x[:len(args.metrics_recorder['current_settings'][-1]['x0'])]
-    y = y[:len(args.metrics_recorder['current_settings'][-1]['y0'])]
-    #
     # 1.) aep
     if args.nf:
         daep = args.wake_model.aep_gradients(gradient_method=autograd, wrt_arg=['x', 'y'], x=np.concatenate((x,args.xn)), y=np.concatenate((y,args.yn)), ws=args.ws_current["value"], TI=args.TI, wd=args.wd_current["value"], time=args.Time["value"])[:args.tur_nr[args.wf[args.curzone]],:args.tur_nr[args.wf[args.curzone]]] * 1e3
@@ -446,9 +438,6 @@ def lcoe_jac(x, y, **kwargs):
     # 4.) lcoe
     CRF = args.d / (1 - (1 + args.d) ** -args.life)
     dlcoe = (CRF*(args.dmp_cost["value"]+args.dcable_cost["value"].T)*args.aep["value"] - ((args.capex*len(x)+args.LP*len(x)+np.sum(args.mp_cost["value"])+args.cable_cost["value"])*CRF+args.OpexAnnual*len(x))*daep) / (args.aep["value"] ** 2)
-    #
-    # 5.) add dummy zeros in case of sequential optimization (--> these turbines don't move, they are just there to ensure the min. spacing constraint)
-    dlcoe = np.hstack([dlcoe, np.ones((dlcoe.shape[0], len(args.xn)))*1e-10])
     #
     if args.obj == 'lcoe':
         return dlcoe # $/MWh
@@ -747,18 +736,18 @@ def opt_competitive(seed,*,Sequence,boundaries,File,metrics_recorder,Subs_x,Subs
         loop_range = range(6,len(Sequence))
     else:
         loop_range = range(len(Sequence))
-
+    
     # Generate initial layouts for each wind farm with the current seed
     coords = {name: poisson_disc_filler(tur_nr[wf[name]], min_dist=0.8*min_spacing_m, BorderC=boundaries[name], seed=seed)
               for name in wf}
-            
+    
     # general options
     File += '_s' + str(seed)
     sample = True
     SepCabling = False
     boundplot = list(boundaries.values())
     plot_folder = "Figures//" + File
-        
+    
     # go through each zone as specified in Sequenc
     for i in loop_range:
         now = datetime.now()
@@ -771,11 +760,6 @@ def opt_competitive(seed,*,Sequence,boundaries,File,metrics_recorder,Subs_x,Subs
             y0 = np.array(metrics_recorder['y_'+curzone][-1])
         else:
             x0, y0 = coords[curzone].T
-            # x0 = [550720.266374936,550720.266374936,552353.266374936,552353.266374936,552353.266374936,552353.266374936,552353.266374936,553986.266374936,553986.266374936,553986.266374936,553986.266374936,553986.266374936,553986.266374936,553986.266374936,555619.266374936,555619.266374936,555619.266374936,555619.266374936,555619.266374936,555619.266374936,555619.266374936,555619.266374936,555619.266374936,555619.266374936,557252.266374936,557252.266374936,557252.266374936,557252.266374936,557252.266374936,557252.266374936,557252.266374936,557252.266374936,558885.266374936]
-            # y0 = [5839886.96637494,5841519.96637494,5836620.96637494,5838253.96637494,5839886.96637494,5841519.96637494,5843152.96637494,5834987.96637494,5836620.96637494,5838253.96637494,5839886.96637494,5841519.96637494,5843152.96637494,5844785.96637494,5833354.96637494,5834987.96637494,5836620.96637494,5838253.96637494,5839886.96637494,5841519.96637494,5843152.96637494,5844785.96637494,5846418.96637494,5848051.96637494,5838253.96637494,5839886.96637494,5841519.96637494,5843152.96637494,5844785.96637494,5846418.96637494,5848051.96637494,5849684.96637494,5846418.96637494]
-        
-        # Constraint
-        constraint_comp = XYBoundaryConstraint([InclusionZone(boundaries[Sequence[i]])], 'multi_polygon')
         
         # Options
         Sx = [Subs_x[wf[curzone]]]
@@ -801,6 +785,12 @@ def opt_competitive(seed,*,Sequence,boundaries,File,metrics_recorder,Subs_x,Subs
                 mp_cost_n[j]= metrics_recorder['mp_cost_' + zone][-1]
         else:
             nf = False
+              
+        # Constraint
+        boundary_constraint = CorrectedXYBoundaryConstraint([InclusionZone(boundaries[Sequence[i]])], boundary_type='multi_polygon')
+        additional_turbines = [xn, yn]
+        spacing_constraint = SpacingConstraintWithAdditionalTurbines(min_spacing_m, additional_turbines)
+        aggregated_constraints = DistanceConstraintAggregation(boundary_constraint=boundary_constraint, spacing_constraint=spacing_constraint, n_wt=tur_nr[wf[Sequence[i]]])
         
         # Plot or not
         if plot_iter:
@@ -836,17 +826,12 @@ def opt_competitive(seed,*,Sequence,boundaries,File,metrics_recorder,Subs_x,Subs
         cost_func = partial(lcoe_func, **extra_vars)
         cost_grad_func = partial(lcoe_jac, **extra_vars)
         
-        # give indices of external "dummy" turbines (modified SGD driver to keep the associated variables untouched)
-        ext_ind = np.concatenate((np.arange(len(x0),len(x0)+len(xn)),               # x-indices
-                                  np.arange(2*len(x0)+len(xn),2*(len(x0)+len(xn)))  # y-indices
-                                  ))
-        
         # Optimization Setup
         tf = TopFarmProblem(
-                design_vars = {'x':np.concatenate([x0,xn]), 'y': np.concatenate([y0,yn])},         
-                cost_comp = CostModelComponent(input_keys=['x','y'], n_wt=len(np.concatenate([x0,xn])), cost_function=cost_func, objective=True, cost_gradient_function=cost_grad_func, maximize=maximize),
-                constraints = DistanceConstraintAggregation(constraint_comp, len(np.concatenate([x0,xn])), min_spacing_m, windTurbines), 
-                driver = EasySGDDriver(maxiter=maxiter, learning_rate=learning_rate, speedupSGD=True, sgd_thresh=sgd_thresh, ext_ind=ext_ind),
+                design_vars = {'x':x0, 'y':y0},         
+                cost_comp = CostModelComponent(input_keys=['x','y'], n_wt=tur_nr[wf[Sequence[i]]], cost_function=cost_func, objective=True, cost_gradient_function=cost_grad_func, maximize=maximize),
+                constraints = aggregated_constraints, 
+                driver = EasySGDDriver(maxiter=maxiter, learning_rate=learning_rate, speedupSGD=True, sgd_thresh=sgd_thresh),
                 plot_comp = plot_comp)
         
         # Run
