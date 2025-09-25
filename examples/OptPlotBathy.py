@@ -190,7 +190,7 @@ class XYPlotCompBathym(ExplicitComponent):
             
     def plot_tur_spacing(self, x, y):
         for i, (x, y) in enumerate(zip(x, y)):
-            circle = Circle((x, y), self.metrics_recorder['settings'][0]['d_RD']*283.2181/2,
+            circle = Circle((x, y), self.metrics_recorder['general_settings'][0]['d_RD']*283.2181/2,
                             facecolor=(255/255, 140/255, 0/255, 0.3), # darkorange with alpha = 0.3
                             edgecolor='darkorange',
                             linewidth=0.7,
@@ -199,7 +199,7 @@ class XYPlotCompBathym(ExplicitComponent):
             
     def plot_nb_spacing(self, x, y):
         for x, y in zip(x,y):
-            circle = Circle((x, y), self.metrics_recorder['settings'][0]['d_RD']*283.2181/2,
+            circle = Circle((x, y), self.metrics_recorder['general_settings'][0]['d_RD']*283.2181/2,
                             facecolor=(255/255, 140/255, 0/255, 0.3), # darkorange with alpha = 0.3
                             edgecolor='darkorange',
                             linewidth=0.7)

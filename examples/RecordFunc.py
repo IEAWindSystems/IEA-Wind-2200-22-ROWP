@@ -58,7 +58,8 @@ def create_recorder(Sequence):
         "sgd_constraint_violation": [],
         "tur_dist_violation": [],
         "bound_violation": [],
-        "settings": []
+        "general_settings": [],
+        "current_settings": []
     }
     return metrics_recorder
 
