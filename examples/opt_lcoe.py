@@ -75,23 +75,23 @@ from TopfarmAdvancedConstraints import CorrectedXYBoundaryConstraint, SpacingCon
 #
 #%% INPUTS
 # Parallelization
-seeds = [1]                           # random np seed for initial layout configuration. If more than 1, parallel execution.
+seeds = [5,6]                           # random np seed for initial layout configuration. If more than 1, parallel execution.
 num_workers = 2                         # number of workers for parallel execution if len(seeds)>1 
 
 # General inputs
 Mode = 'competitive'                    # 'cooperative' or 'competitive' or 'evaluate_recorder' or 'evaluate_multiter' or 'CompareCabling' or 'evaluate_layout'
 Continue = False                        # set to True if you give foregoing metrics_recorder to continue optimization
 File = 'test'                           # define name of files that is stored or loaded. the seed will be added as e.g. "_s3"
-Sequence = ['north','mid','south']*2    # define sequence of zones for sequential design
+Sequence = ['north','mid','south']*4    # define sequence of zones for sequential design
 CableSolver = 'MetaHeuristic'           # 'Heuristic', 'MetaHeuristic', 'MILP_cplex', 'MILP_ortools' or 'MILP_gurobi'
 Model = 'turbopark'                     # 'jensen', 'gauss' or 'turbopark'
 tur_nr = [33,33,34]                     # Desired turbine number in optimized farm, from north to south!
 obj = 'lcoe'                            # 'lcoe' or 'aep'
 plot_iter = True                        # True or False: plot and store layouts during optimization each plot_each iterations
 plot_postpro = True                     # True or False: plot and store layouts during postprocessing (how often is linked to step)
-plot_each = 25                          # define in which interval a plot should be made
+plot_each = 100                          # define in which interval a plot should be made
 d_RD = 6                                # min spacing distance in rotor diameters
-step = 100                               # at each "step" iterations, the full wind rose is recalculated in postprocessing (when sampling is used during opt)
+step = 250                               # at each "step" iterations, the full wind rose is recalculated in postprocessing (when sampling is used during opt)
 
 # plot lims
 xlim = None                             # specify xlim for convergence plot or put None
