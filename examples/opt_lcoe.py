@@ -83,7 +83,8 @@ Mode = 'competitive'                    # 'cooperative' or 'competitive' or 'eva
 Continue = False                        # set to True if you give foregoing metrics_recorder to continue optimization
 File = 'test'                           # define name of files that is stored or loaded. the seed will be added as e.g. "_s3"
 Sequence = ['north','mid','south']*4    # define sequence of zones for sequential design
-CableSolver = 'MetaHeuristic'           # 'Heuristic', 'MetaHeuristic', 'MILP_cplex', 'MILP_ortools' or 'MILP_gurobi'
+CableSolver_opt = 'MetaHeuristic'       # 'Heuristic', 'MetaHeuristic', 'MILP_cplex', 'MILP_ortools' or 'MILP_gurobi'
+CableSolver_final = 'MILP_gurobi'
 Model = 'turbopark'                     # 'jensen', 'gauss' or 'turbopark'
 tur_nr = [33,33,34]                     # Desired turbine number in optimized farm, from north to south!
 obj = 'lcoe'                            # 'lcoe' or 'aep'
@@ -264,16 +265,12 @@ samps = 100    #number of samples
 site.interp_method = 'linear'
 
 # Cable optimization
-CableSolvers = ['MetaHeuristic', 'Heuristic', 'MILP_cplex', 'MILP_gurobi', 'MILP_ortools']         # Available solvers in default order
-CableSolvers_order = [CableSolver] + [s for s in CableSolvers if s != CableSolver]  # Try primary solver first
-tl_metaheuristic = 0.3  # time limit
-tl_milp = 3
-mip_gap = 0.005
-Routers = {'Heuristic': EWRouter(),
-           'MetaHeuristic': HGSRouter(time_limit=tl_metaheuristic),
-           'MILP_cplex': MILPRouter(solver_name='cplex', time_limit=tl_milp, mip_gap=mip_gap, verbose=False),
-           'MILP_ortools': MILPRouter(solver_name='ortools', time_limit=tl_milp, mip_gap=mip_gap, verbose=False),
-           'MILP_gurobi': MILPRouter(solver_name='gurobi', time_limit=tl_milp, mip_gap=mip_gap, verbose=False)}
+# CableSolvers = ['MetaHeuristic', 'Heuristic', 'MILP_cplex', 'MILP_gurobi', 'MILP_ortools']         # Available solvers in default order
+# CableSolvers_order = [CableSolver] + [s for s in CableSolvers if s != CableSolver]  # Try primary solver first
+tl_opt = 0.3  # time limit during optimization
+tl_final = 3000  # time limit for final run
+mip_gap_opt = 0.005
+mip_gap_final = 0.0005
 cables = np.array(
     [(int(c["capacity_NrT"]), float(c["cost_€_m"])) for c in cable_specs],
     dtype=[("capacity", int), ("cost", float)])
@@ -316,15 +313,18 @@ def sampling():
     return wd, ws
 
 #%% Cabling optimization
-def opt_cabling(x=None,y=None,Sx=None,Sy=None,cables=None):
+def opt_cabling(x=None,y=None,Sx=None,Sy=None,cables=None,CableSolver='MetaHeuristic',time_limit=0.3, mip_gap=0.005):
     if CableSolver in ['MILP_cplex', 'MILP_ortools', 'MILP_gurobi']:
         # warm start
-        wfn = WindFarmNetwork(turbinesC=np.column_stack((x, y)),substationsC=np.column_stack((Sx, Sy)),cables=cables,router=Routers.get('MetaHeuristic'))
+        wfn = WindFarmNetwork(turbinesC=np.column_stack((x, y)),substationsC=np.column_stack((Sx, Sy)),cables=cables,router=HGSRouter(time_limit=0.3))
         wfn.optimize()
         # chosen router
-        wfn.optimize(router=Routers.get(CableSolver))
-    else:
-        wfn = WindFarmNetwork(turbinesC=np.column_stack((x, y)),substationsC=np.column_stack((Sx, Sy)),cables=cables,router=Routers.get(CableSolver))
+        wfn.optimize(router=MILPRouter(solver_name=CableSolver, time_limit=time_limit, mip_gap=mip_gap, verbose=False))
+    elif CableSolver == 'MetaHeuristic':
+        wfn = WindFarmNetwork(turbinesC=np.column_stack((x, y)),substationsC=np.column_stack((Sx, Sy)),cables=cables,router=HGSRouter(time_limit=time_limit))
+        wfn.optimize()
+    elif CableSolver == 'Heuristic':
+        wfn = WindFarmNetwork(turbinesC=np.column_stack((x, y)),substationsC=np.column_stack((Sx, Sy)),cables=cables,router=EWRouter())
         wfn.optimize()
     return wfn
 
@@ -364,14 +364,14 @@ def lcoe_func(x, y, **kwargs):
         cable_costs = []
         dcable_cost = np.empty((0, 2))
         for z, zone in enumerate(args.Sequence):
-            wfn = opt_cabling(x=x[indices[z]],y=y[indices[z]],Sx=args.Sx[z],Sy=args.Sy[z],cables=args.cables)
+            wfn = opt_cabling(x=x[indices[z]],y=y[indices[z]],Sx=args.Sx[z],Sy=args.Sy[z],cables=args.cables,time_limit=args.time_limit,mip_gap=args.mip_gap)
             cable_costs.append(wfn.cost())
             record_cable_metrics(metrics_recorder, args.wfn, zone, args.nnb, args.nb)
             cur_dcable_cost, _ = wfn.gradient(gradient_type='cost')
             dcable_cost = np.vstack((dcable_cost,cur_dcable_cost))
         cable_cost = sum(cable_costs)
     else:
-        wfn = opt_cabling(x=x,y=y,Sx=args.Sx,Sy=args.Sy,cables=args.cables)
+        wfn = opt_cabling(x=x,y=y,Sx=args.Sx,Sy=args.Sy,cables=args.cables,time_limit=args.time_limit,mip_gap=args.mip_gap)
         cable_cost = wfn.cost()     # Costs in Euro
         record_cable_metrics(metrics_recorder, wfn, args.curzone, args.nnb, args.nb)   # recorder
         dcable_cost, _ = wfn.gradient(gradient_type='cost')             # gradients (for function later, to avoid double calculus)
@@ -469,7 +469,7 @@ metrics_recorder = create_recorder(Sequence)
 
 # Store setting
 metrics_recorder['general_settings'].append({'Mode':Mode,'Model':Model,'d_RD':d_RD,'tur_nr':tur_nr,'maxiter':maxiter,'sgd_thresh':sgd_thresh,'obj':obj,'Sequence':Sequence,'samps':samps,
-                                     'depths':depths,'masses':masses,'CableSolver':CableSolver,'tl_metaheuristic':tl_metaheuristic,'tl_milp':tl_milp,'mip_gap':mip_gap}) 
+                                     'depths':depths,'masses':masses,'CableSolver_opt':CableSolver_opt,'CableSolver_final':CableSolver_final,'tl_opt':tl_opt,'tl_final':tl_final,'mip_gap_opt':mip_gap_opt,'mip_gap_final':mip_gap_final}) 
 
 # Prepare kwargs (mutable for objective function + other required variables passed through functions) explicitly
 extra_vars = dict(
@@ -479,7 +479,7 @@ extra_vars = dict(
     # other required variables
     Sequence=Sequence, boundaries=boundaries, File=File,Subs_x=Subs_x, Subs_y=Subs_y, wf=wf, X_utm=X_utm, Y_utm=Y_utm, Z=Z, cables=cables, cables_plot=cables_plot,
     obj=obj, plot_each=plot_each, windTurbines=windTurbines, Mode=Mode, tur_nr=tur_nr, maxiter=maxiter, sgd_thresh=sgd_thresh, step=step,
-    samps=samps, CableSolver=CableSolver, tl_metaheuristic=tl_metaheuristic, tl_milp=tl_milp, mip_gap=mip_gap, wake_model=wake_model,
+    samps=samps, CableSolver_opt=CableSolver_opt, CableSolver_final=CableSolver_final, tl_opt=tl_opt, tl_final=tl_final, mip_gap_opt=mip_gap_opt, mip_gap_final=mip_gap_final, wake_model=wake_model,
     min_spacing_m=min_spacing_m, cable_cost_n=cable_cost_n, mp_cost_n=mp_cost_n, ws=ws, TI =TI, d=d, life=life, LP=LP, capex=capex, OpexAnnual=OpexAnnual,
     polynomial_gradients=polynomial_gradients, polynomial=polynomial, get_depth_grads=get_depth_grads, depth_interp=depth_interp
 )
@@ -819,8 +819,8 @@ def opt_competitive(seed,*,Sequence,boundaries,File,metrics_recorder,Subs_x,Subs
         metrics_recorder['current_settings'].append({'seed':seed,'learning_rate':learning_rate,'curzone':curzone,'x0':x0,'y0':y0,'sample':sample,'SepCabling':SepCabling,'Sx':Sx,'Sy':Sy})
         
         # update kwargs
-        extra_vars.update(xn=xn, yn=yn, Sx=Sx, Sy=Sy, curzone=curzone, nb=nb, nnb=nnb, cable_cost_n=cable_cost_n, mp_cost_n=mp_cost_n, opt_nr=opt_nr, nf=nf, sample=sample, Subs_x=Subs_x, Subs_y=Subs_y,
-                          SepCabling=SepCabling, File=File, metrics_recorder=metrics_recorder, Sequence=Sequence, obj=obj, wf=wf, tur_nr=tur_nr, boundaries=boundaries, X_utm=X_utm, Y_utm=Y_utm, Z=Z, cables_plot=cables_plot)
+        extra_vars.update(xn=xn, yn=yn, Sx=Sx, Sy=Sy, curzone=curzone, nb=nb, nnb=nnb, cable_cost_n=cable_cost_n, mp_cost_n=mp_cost_n, opt_nr=opt_nr, nf=nf, sample=sample, Subs_x=Subs_x, Subs_y=Subs_y, time_limit=tl_opt, mip_gap=mip_gap_opt,
+                          SepCabling=SepCabling, File=File, metrics_recorder=metrics_recorder, Sequence=Sequence, obj=obj, wf=wf, tur_nr=tur_nr, boundaries=boundaries, X_utm=X_utm, Y_utm=Y_utm, Z=Z, cables_plot=cables_plot, CableSolver=CableSolver_opt)
 
         # define cost and gradient function with handed over extra_vars
         cost_func = partial(lcoe_func, **extra_vars)
@@ -840,9 +840,17 @@ def opt_competitive(seed,*,Sequence,boundaries,File,metrics_recorder,Subs_x,Subs
         toc = time.time()
         print('Optimization with SGD took: {:.0f}s'.format(toc-tic), ' with a total constraint violation of ', recorder['sgd_constraint'][-1])
         
+        # Final cabling optimization
+        print('Final cabling optimization...')
+        tic = time.time()
+        extra_vars.update(metrics_recorder=metrics_recorder, time_limit=tl_final, mip_gap=mip_gap_final, CableSolver=CableSolver_final)
+        lcoe_func(np.array(metrics_recorder['x_'+curzone][-1]), np.array(metrics_recorder['y_'+curzone][-1]),**extra_vars)
+        toc = time.time()
+        print('Final cabling optimization took: {:.0f}s'.format(toc-tic))
+        
         # Store
-        record_results_constraints(metrics_recorder, recorder, state, cost, min_spacing_m)
         extra_vars.update(metrics_recorder=metrics_recorder)
+        record_results_constraints(metrics_recorder, recorder, state, cost, min_spacing_m)
         
         # Save recorder to file
         with open("Results//" + File + ".pkl", "wb") as file:
