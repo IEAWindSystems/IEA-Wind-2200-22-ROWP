@@ -268,9 +268,9 @@ site.interp_method = 'linear'
 # CableSolvers = ['MetaHeuristic', 'Heuristic', 'MILP_cplex', 'MILP_gurobi', 'MILP_ortools']         # Available solvers in default order
 # CableSolvers_order = [CableSolver] + [s for s in CableSolvers if s != CableSolver]  # Try primary solver first
 tl_opt = 0.3  # time limit during optimization
-tl_final = 3000  # time limit for final run
+tl_final = 3600  # time limit for final run
 mip_gap_opt = 0.005
-mip_gap_final = 0.0005
+mip_gap_final = 0.001
 cables = np.array(
     [(int(c["capacity_NrT"]), float(c["cost_€_m"])) for c in cable_specs],
     dtype=[("capacity", int), ("cost", float)])
@@ -366,14 +366,14 @@ def lcoe_func(x, y, **kwargs):
         for z, zone in enumerate(args.Sequence):
             wfn = opt_cabling(x=x[indices[z]],y=y[indices[z]],Sx=args.Sx[z],Sy=args.Sy[z],cables=args.cables,time_limit=args.time_limit,mip_gap=args.mip_gap)
             cable_costs.append(wfn.cost())
-            record_cable_metrics(metrics_recorder, args.wfn, zone, args.nnb, args.nb)
+            record_cable_metrics(metrics_recorder, args.wfn, zone, args.nnb, args.nb, args.CableSolver, args.time_limit, args.mip_gap)
             cur_dcable_cost, _ = wfn.gradient(gradient_type='cost')
             dcable_cost = np.vstack((dcable_cost,cur_dcable_cost))
         cable_cost = sum(cable_costs)
     else:
         wfn = opt_cabling(x=x,y=y,Sx=args.Sx,Sy=args.Sy,cables=args.cables,time_limit=args.time_limit,mip_gap=args.mip_gap)
         cable_cost = wfn.cost()     # Costs in Euro
-        record_cable_metrics(metrics_recorder, wfn, args.curzone, args.nnb, args.nb)   # recorder
+        record_cable_metrics(metrics_recorder, wfn, args.curzone, args.nnb, args.nb, args.CableSolver, args.time_limit, args.mip_gap)   # recorder
         dcable_cost, _ = wfn.gradient(gradient_type='cost')             # gradients (for function later, to avoid double calculus)
     # !! ToDo: Scale costs to same currency and year of reference
     #
@@ -620,7 +620,8 @@ def postprocess_recorder(data, Sequence, step, Subs_x, Subs_y, wf, boundaries, F
             
         # update kwargs
         extra_vars.update(xn=xn, yn=yn, Sx=Sx, Sy=Sy, curzone=curzone, nb=nb, nnb=nnb, cable_cost_n=cable_cost_n, mp_cost_n=mp_cost_n, opt_nr=opt_nr,
-                          nf=nf, sample=sample, SepCabling=SepCabling, File=File, metrics_recorder=metrics_recorder, Sequence=Sequence, wf=wf, obj=obj)     
+                          nf=nf, sample=sample, SepCabling=SepCabling, File=File, metrics_recorder=metrics_recorder, Sequence=Sequence, wf=wf, obj=obj,
+                          CableSolver=data["cable_solver"][idx],time_limit=data["time_limit"][idx], mip_gap=data["mip_gap"][idx])     
         
         # run
         lcoe_func(x0,y0,**extra_vars)

@@ -55,6 +55,9 @@ def create_recorder(Sequence):
         "x_final": [],
         "y_final": [],
         "lcoe_final": [],
+        "cable_solver": [],
+        "time_limit": [],
+        "mip_gap": [],
         "sgd_constraint_violation": [],
         "tur_dist_violation": [],
         "bound_violation": [],
@@ -63,7 +66,7 @@ def create_recorder(Sequence):
     }
     return metrics_recorder
 
-def record_cable_metrics(metrics_recorder, wfn, curzone, nnb, nb):
+def record_cable_metrics(metrics_recorder, wfn, curzone, nnb, nb, cable_solver, time_limit, mip_gap):
     cab_data = wfn.get_network()
     # get connection matrix
     u_fnt = []
@@ -78,7 +81,10 @@ def record_cable_metrics(metrics_recorder, wfn, curzone, nnb, nb):
     metrics_recorder["cable_u_" + curzone].append(u_fnt)
     metrics_recorder["cable_v_" + curzone].append(v_fnt)
     metrics_recorder["cable_type_" + curzone].append(cab_data['cable'].tolist()) #([t[2]['cable'] for t in cab_data])
-
+    metrics_recorder["cable_solver"].append(cable_solver)
+    metrics_recorder["time_limit"].append(time_limit)
+    metrics_recorder["mip_gap"].append(mip_gap)
+    
     for zone in nnb:
         metrics_recorder["cable_u_" + zone].append([])
         metrics_recorder["cable_v_" + zone].append([])
