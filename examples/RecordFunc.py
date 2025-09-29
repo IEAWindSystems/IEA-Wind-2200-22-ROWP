@@ -18,8 +18,6 @@ def create_recorder(Sequence):
         "mp_cost": [],
         "cable_cost": [],
         "lcoe": [],
-        "cable_u": [],
-        "cable_v": [],
         "cable_u_north": [],
         "cable_u_mid": [],
         "cable_u_south": [],
@@ -55,9 +53,7 @@ def create_recorder(Sequence):
         "x_final": [],
         "y_final": [],
         "lcoe_final": [],
-        "cable_solver": [],
-        "time_limit": [],
-        "mip_gap": [],
+        "cable_info": [],
         "sgd_constraint_violation": [],
         "tur_dist_violation": [],
         "bound_violation": [],
@@ -66,7 +62,7 @@ def create_recorder(Sequence):
     }
     return metrics_recorder
 
-def record_cable_metrics(metrics_recorder, wfn, curzone, nnb, nb, cable_solver, time_limit, mip_gap):
+def record_cable_metrics(metrics_recorder, wfn, curzone, nnb, nb):
     cab_data = wfn.get_network()
     # get connection matrix
     u_fnt = []
@@ -81,9 +77,10 @@ def record_cable_metrics(metrics_recorder, wfn, curzone, nnb, nb, cable_solver, 
     metrics_recorder["cable_u_" + curzone].append(u_fnt)
     metrics_recorder["cable_v_" + curzone].append(v_fnt)
     metrics_recorder["cable_type_" + curzone].append(cab_data['cable'].tolist()) #([t[2]['cable'] for t in cab_data])
-    metrics_recorder["cable_solver"].append(cable_solver)
-    metrics_recorder["time_limit"].append(time_limit)
-    metrics_recorder["mip_gap"].append(mip_gap)
+    try:
+        metrics_recorder["cable_info"].append(wfn.solution_info())
+    except:
+        metrics_recorder["cable_info"].append([''])
     
     for zone in nnb:
         metrics_recorder["cable_u_" + zone].append([])
@@ -177,13 +174,16 @@ def record_results_constraints(metrics_recorder, recorder, state, cost, min_spac
     metrics_recorder["x_final"].append(state['x'].tolist())
     metrics_recorder["y_final"].append(state['y'].tolist())
     metrics_recorder["sgd_constraint_violation"] += recorder['sgd_constraint'].tolist()
+    metrics_recorder["sgd_constraint_violation"].append(metrics_recorder["sgd_constraint_violation"][-1])
     
     # min spacing constraint
     dv = np.sqrt(recorder['wtSeparationSquared']) - min_spacing_m
     dv[dv > 0] = 0
     metrics_recorder["tur_dist_violation"] += dv.sum(axis=1).tolist()
+    metrics_recorder["tur_dist_violation"].append(metrics_recorder["tur_dist_violation"][-1])
     
     # boundary constraint
     bv = recorder['boundaryDistances']
     bv[bv > 0] = 0
     metrics_recorder["bound_violation"] += bv.sum(axis=1).tolist()
+    metrics_recorder["bound_violation"].append(metrics_recorder["bound_violation"][-1])

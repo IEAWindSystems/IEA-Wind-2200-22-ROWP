@@ -83,16 +83,16 @@ Mode = 'competitive'                    # 'cooperative' or 'competitive' or 'eva
 Continue = False                        # set to True if you give foregoing metrics_recorder to continue optimization
 File = 'test'                           # define name of files that is stored or loaded. the seed will be added as e.g. "_s3"
 Sequence = ['north','mid','south']*4    # define sequence of zones for sequential design
-CableSolver_opt = 'MetaHeuristic'       # 'Heuristic', 'MetaHeuristic', 'MILP_cplex', 'MILP_ortools' or 'MILP_gurobi'
-CableSolver_final = 'MILP_gurobi'
+CableSolver_opt = 'MetaHeuristic'       # Cable solver using during nested optimization: 'Heuristic', 'MetaHeuristic', 'cplex', 'ortools' or 'gurobi'
+CableSolver_final = 'ortools'           # Cable solver used for final cabling plan optimization.
 Model = 'turbopark'                     # 'jensen', 'gauss' or 'turbopark'
 tur_nr = [33,33,34]                     # Desired turbine number in optimized farm, from north to south!
 obj = 'lcoe'                            # 'lcoe' or 'aep'
 plot_iter = True                        # True or False: plot and store layouts during optimization each plot_each iterations
 plot_postpro = True                     # True or False: plot and store layouts during postprocessing (how often is linked to step)
-plot_each = 100                          # define in which interval a plot should be made
+plot_each = 100                         # define in which interval a plot should be made
 d_RD = 6                                # min spacing distance in rotor diameters
-step = 250                               # at each "step" iterations, the full wind rose is recalculated in postprocessing (when sampling is used during opt)
+step = 250                              # at each "step" iterations, the full wind rose is recalculated in postprocessing (when sampling is used during opt)
 
 # plot lims
 xlim = None                             # specify xlim for convergence plot or put None
@@ -105,7 +105,9 @@ maxiter = 3000                          # maximum nr of iterations for SGD opt
 sgd_thresh = 0.02                       # SGD threshold
 
 # Monopile optimization
-MP_ref = 1                              # reference turbine type for monopile mass scaling. 0 = 10MW, 1 = 15MW, 2 = 3.4MW
+MP_data = 'LUT'                         # 'LUT' for mass-vs-depth look-up tables, 'Surrogate' for mass surrogate model
+MP_LUT_file = 'ssms//Mass_Monopile_22MW_extrapolated.csv'   # file name of the LUT if option chosen
+MP_ref = 1                              # reference turbine type for monopile mass scaling if surrogate chosen. 0 = 10MW, 1 = 15MW, 2 = 3.4MW
 
 # lcoe parameters
 d = 0.0661                              # [-] discount rate, from NREL CoE 2024 report
@@ -116,7 +118,7 @@ LP = 0                                  # $2010 per turbine, liquidation proceed
 
 # mass surrogate
 PlatformHeight = 15                     # Platform height [m]
-WaveHeight = 1.4                        # Significant Wave Height [m], taken from HKW metocean report p. 183
+WaveHeight = 1.5                        # Significant Wave Height [m], taken from HKW metocean report p. 183 (There: 1.40 --> approximated with 1.5 as it is the lower bound of the mass surrogate model)
 WavePeriod = 6.75                       # Associated Wave Period [s]
 
 # Cable data [cross section, capacity, price]
@@ -236,22 +238,29 @@ def depth_interp(x, y):
     return interpolator(np.array([y, x]).T)
 
 # Calculate monopile mass for different water depth
-# Note: a mass surrogate model only with 20MW results is built. Approximation of the 22MW machine.
-depths = np.linspace(np.min(-Z),np.max(-Z),20)
-import scipy.special as sp
-def mean_wind_speed(A, k):
-    return A * sp.gamma(1 + 1/k)
-V_ave = []
-for i in range(len(wd)):
-    V_ave.append(mean_wind_speed(A['data'][i],k['data'][i]))
-V_ave = np.sum(np.array(V_ave) * np.array(freq['data']))
-masses = []
-for z in depths:
-   cur_mass = CalculateMass(D=rd, HTrans=PlatformHeight, HHub=hh, WaterDepth=z, WaveHeight=WaveHeight, WavePeriod=WavePeriod, WindSpeed=V_ave, IP_item=1)
-   masses.append(cur_mass[0][0])
+if MP_data == 'Surrogate':
+    # A mass surrogate model only with 20MW results is built. Approximation of the 22MW machine.
+    trainQLS()
+    depths = np.linspace(np.min(-Z),np.max(-Z),20)
+    import scipy.special as sp
+    def mean_wind_speed(A, k):
+        return A * sp.gamma(1 + 1/k)
+    V_ave = []
+    for i in range(len(wd)):
+        V_ave.append(mean_wind_speed(A['data'][i],k['data'][i]))
+    V_ave = np.sum(np.array(V_ave) * np.array(freq['data']))
+    masses = []
+    for z in depths:
+       cur_mass = CalculateMass(D=rd, HTrans=PlatformHeight, HHub=hh, WaterDepth=z, WaveHeight=WaveHeight, WavePeriod=WavePeriod, WindSpeed=V_ave, IP_item=1)
+       masses.append(cur_mass[0][0])
+elif MP_data == 'LUT':
+    # Load external file with mass-vs-depth data
+    df = pd.read_csv(MP_LUT_file)
+    depths = df['Depth_m'].tolist()
+    masses = df['Mass_kg'].tolist()
+    
 # add transition piece (100t, from 22MW report)
 masses = [x + 100000 for x in masses]
-# masses = [985788.0033692981, 1006729.722727049, 1027991.492707832, 1049573.3133116479, 1071475.1845384957, 1093697.1063883766, 1116239.0788612892, 1139101.1019572348, 1162283.1756762124, 1185785.300018223, 1209607.4749832656, 1233749.7005713405, 1258211.9767824481, 1282994.3036165882, 1308096.6810737606, 1333519.1091539655, 1359261.587857203, 1385324.1171834725, 1411706.6971327746, 1438409.3277051093]
 
 # Fit a polynomial of degree 2
 depthmass = np.column_stack((masses,depths))
@@ -265,10 +274,10 @@ samps = 100    #number of samples
 site.interp_method = 'linear'
 
 # Cable optimization
-# CableSolvers = ['MetaHeuristic', 'Heuristic', 'MILP_cplex', 'MILP_gurobi', 'MILP_ortools']         # Available solvers in default order
+# CableSolvers = ['MetaHeuristic', 'Heuristic', 'cplex', 'gurobi', 'ortools']         # Available solvers in default order
 # CableSolvers_order = [CableSolver] + [s for s in CableSolvers if s != CableSolver]  # Try primary solver first
-tl_opt = 0.3  # time limit during optimization
-tl_final = 3600  # time limit for final run
+tl_opt = 0.3      # time limit during optimization
+tl_final = 3600   # time limit for final run
 mip_gap_opt = 0.005
 mip_gap_final = 0.001
 cables = np.array(
@@ -286,12 +295,8 @@ if plot_iter and (Mode == 'cooperative' or Mode == 'competitive'):
 # defaults
 # neighbour wind farm with turbine coordinates and costs to consider
 nf = False
-xn = []
-yn = []
 cable_cost_n = [0,0]
 mp_cost_n = [0,0]
-SepCabling = False
-opt_nr = 1
 if Mode == 'cooperative':
     Sequence = list(dict.fromkeys(Sequence))
     
@@ -314,7 +319,7 @@ def sampling():
 
 #%% Cabling optimization
 def opt_cabling(x=None,y=None,Sx=None,Sy=None,cables=None,CableSolver='MetaHeuristic',time_limit=0.3, mip_gap=0.005):
-    if CableSolver in ['MILP_cplex', 'MILP_ortools', 'MILP_gurobi']:
+    if CableSolver in ['cplex', 'ortools', 'gurobi']:
         # warm start
         wfn = WindFarmNetwork(turbinesC=np.column_stack((x, y)),substationsC=np.column_stack((Sx, Sy)),cables=cables,router=HGSRouter(time_limit=0.3))
         wfn.optimize()
@@ -359,22 +364,28 @@ def lcoe_func(x, y, **kwargs):
     dmp_cost = 3 * dmasses          # from ORBIT 2025 tp_steel_cost default
     #
     # 3.) Cable costs
-    if args.SepCabling:
+    if args.CableOpt == 'multi_sub':
+        # optimize each subzone with respective substation sequentially
         indices = [np.arange(sum(args.tur_nr[:idx]), sum(args.tur_nr[:idx + 1])) for idx in range(len(args.wf))]
         cable_costs = []
         dcable_cost = np.empty((0, 2))
         for z, zone in enumerate(args.Sequence):
-            wfn = opt_cabling(x=x[indices[z]],y=y[indices[z]],Sx=args.Sx[z],Sy=args.Sy[z],cables=args.cables,time_limit=args.time_limit,mip_gap=args.mip_gap)
+            wfn = opt_cabling(x=x[indices[z]],y=y[indices[z]],Sx=args.Sx[z],Sy=args.Sy[z],cables=args.cables,CableSolver=args.CableSolver,time_limit=args.time_limit,mip_gap=args.mip_gap)
             cable_costs.append(wfn.cost())
-            record_cable_metrics(metrics_recorder, args.wfn, zone, args.nnb, args.nb, args.CableSolver, args.time_limit, args.mip_gap)
+            record_cable_metrics(metrics_recorder, wfn, zone, args.nnb, args.nb)
             cur_dcable_cost, _ = wfn.gradient(gradient_type='cost')
             dcable_cost = np.vstack((dcable_cost,cur_dcable_cost))
         cable_cost = sum(cable_costs)
-    else:
-        wfn = opt_cabling(x=x,y=y,Sx=args.Sx,Sy=args.Sy,cables=args.cables,time_limit=args.time_limit,mip_gap=args.mip_gap)
+    elif args.CableOpt == 'single_sub':
+        # all turbines connected to one substation
+        wfn = opt_cabling(x=x,y=y,Sx=args.Sx,Sy=args.Sy,cables=args.cables,CableSolver=args.CableSolver,time_limit=args.time_limit,mip_gap=args.mip_gap)
         cable_cost = wfn.cost()     # Costs in Euro
-        record_cable_metrics(metrics_recorder, wfn, args.curzone, args.nnb, args.nb, args.CableSolver, args.time_limit, args.mip_gap)   # recorder
+        record_cable_metrics(metrics_recorder, wfn, args.curzone, args.nnb, args.nb)   # recorder
         dcable_cost, _ = wfn.gradient(gradient_type='cost')             # gradients (for function later, to avoid double calculus)
+    elif args.CableOpt == 'off':
+        # read cable costs from kwargs
+        cable_cost = args.cable_cost_external
+        dcable_cost = None
     # !! ToDo: Scale costs to same currency and year of reference
     #
     # 4.) lcoe
@@ -401,7 +412,7 @@ def lcoe_func(x, y, **kwargs):
     kwargs["wd_current"]["value"] = wd_current
     kwargs["ws_current"]["value"] = ws_current
     kwargs["Time"]["value"] = Time
-
+    #
     if args.obj == 'lcoe':
         return lcoe # $/MWh
     elif args.obj == 'aep':
@@ -579,7 +590,6 @@ def postprocess_recorder(data, Sequence, step, Subs_x, Subs_y, wf, boundaries, F
             for zone in Sequence:
                 x0 = np.concatenate([x0,data['x_' + zone][idx]])
                 y0 = np.concatenate([y0,data['y_' + zone][idx]])
-            SepCabling = True
             Sx = Subs_x
             Sy = Subs_y
             nnb = []
@@ -587,7 +597,6 @@ def postprocess_recorder(data, Sequence, step, Subs_x, Subs_y, wf, boundaries, F
             # sequential
             x0 = np.array(data['x_' + curzone][idx])
             y0 = np.array(data['y_' + curzone][idx])
-            SepCabling = False
             nnb = list(set(Sequence))
             nnb.remove(curzone)
             nnb = [x for x in nnb if x not in nb]
@@ -617,14 +626,20 @@ def postprocess_recorder(data, Sequence, step, Subs_x, Subs_y, wf, boundaries, F
             # update setting only for new zone
             metrics_recorder['current_settings'].append(data['current_settings'][opt_nr_check])
             opt_nr_check = opt_nr
-            
+        
+        # copy some cable entries (cable plan already calculated)
+        for k, v in data.items():
+            if "cable" in k and "cable_cost" not in k and v:
+                metrics_recorder[k].append(v[idx])
+        
         # update kwargs
         extra_vars.update(xn=xn, yn=yn, Sx=Sx, Sy=Sy, curzone=curzone, nb=nb, nnb=nnb, cable_cost_n=cable_cost_n, mp_cost_n=mp_cost_n, opt_nr=opt_nr,
-                          nf=nf, sample=sample, SepCabling=SepCabling, File=File, metrics_recorder=metrics_recorder, Sequence=Sequence, wf=wf, obj=obj,
-                          CableSolver=data["cable_solver"][idx],time_limit=data["time_limit"][idx], mip_gap=data["mip_gap"][idx])     
+                          nf=nf, sample=sample, File=File, metrics_recorder=metrics_recorder, Sequence=Sequence, wf=wf, obj=obj,
+                          CableOpt='off', cable_cost_external=data["cable_cost"][idx])     
         
         # run
         lcoe_func(x0,y0,**extra_vars)
+        metrics_recorder = extra_vars['metrics_recorder']
         
         # plot
         if plot_postpro:
@@ -635,6 +650,7 @@ def postprocess_recorder(data, Sequence, step, Subs_x, Subs_y, wf, boundaries, F
             inputs['y'] = np.array(y0)
             plot.compute(inputs,[])
             plt.close()
+            
     metrics_recorder['iteration'] = eva_indices
     metrics_recorder['x_final'] = data['x_final']
     metrics_recorder['y_final'] = data['y_final']
@@ -742,10 +758,13 @@ def opt_competitive(seed,*,Sequence,boundaries,File,metrics_recorder,Subs_x,Subs
     coords = {name: poisson_disc_filler(tur_nr[wf[name]], min_dist=0.8*min_spacing_m, BorderC=boundaries[name], seed=seed)
               for name in wf}
     
+    # Find the last index of each zone (for final cabling optimization)
+    last_indices = {item: idx for idx, item in enumerate(Sequence)}
+    
     # general options
     File += '_s' + str(seed)
     sample = True
-    SepCabling = False
+    CableOpt = 'single_sub'
     boundplot = list(boundaries.values())
     plot_folder = "Figures//" + File
     
@@ -817,11 +836,11 @@ def opt_competitive(seed,*,Sequence,boundaries,File,metrics_recorder,Subs_x,Subs
                 
         # record settings
         [metrics_recorder[key].append(None) for key in ["sgd_constraint_violation", "tur_dist_violation", "bound_violation"]]   # first run: no optimization
-        metrics_recorder['current_settings'].append({'seed':seed,'learning_rate':learning_rate,'curzone':curzone,'x0':x0,'y0':y0,'sample':sample,'SepCabling':SepCabling,'Sx':Sx,'Sy':Sy})
+        metrics_recorder['current_settings'].append({'seed':seed,'learning_rate':learning_rate,'curzone':curzone,'x0':x0,'y0':y0,'sample':sample,'CableOpt':CableOpt,'Sx':Sx,'Sy':Sy})
         
         # update kwargs
         extra_vars.update(xn=xn, yn=yn, Sx=Sx, Sy=Sy, curzone=curzone, nb=nb, nnb=nnb, cable_cost_n=cable_cost_n, mp_cost_n=mp_cost_n, opt_nr=opt_nr, nf=nf, sample=sample, Subs_x=Subs_x, Subs_y=Subs_y, time_limit=tl_opt, mip_gap=mip_gap_opt,
-                          SepCabling=SepCabling, File=File, metrics_recorder=metrics_recorder, Sequence=Sequence, obj=obj, wf=wf, tur_nr=tur_nr, boundaries=boundaries, X_utm=X_utm, Y_utm=Y_utm, Z=Z, cables_plot=cables_plot, CableSolver=CableSolver_opt)
+                          CableOpt=CableOpt, File=File, metrics_recorder=metrics_recorder, Sequence=Sequence, obj=obj, wf=wf, tur_nr=tur_nr, boundaries=boundaries, X_utm=X_utm, Y_utm=Y_utm, Z=Z, cables_plot=cables_plot, CableSolver=CableSolver_opt)
 
         # define cost and gradient function with handed over extra_vars
         cost_func = partial(lcoe_func, **extra_vars)
@@ -841,16 +860,17 @@ def opt_competitive(seed,*,Sequence,boundaries,File,metrics_recorder,Subs_x,Subs
         toc = time.time()
         print('Optimization with SGD took: {:.0f}s'.format(toc-tic), ' with a total constraint violation of ', recorder['sgd_constraint'][-1])
         
-        # Final cabling optimization
-        print('Final cabling optimization...')
-        tic = time.time()
-        extra_vars.update(metrics_recorder=metrics_recorder, time_limit=tl_final, mip_gap=mip_gap_final, CableSolver=CableSolver_final)
-        lcoe_func(np.array(metrics_recorder['x_'+curzone][-1]), np.array(metrics_recorder['y_'+curzone][-1]),**extra_vars)
-        toc = time.time()
-        print('Final cabling optimization took: {:.0f}s'.format(toc-tic))
+        # Final cabling optimization (last time zone is optimized...)
+        if i == last_indices[curzone]:
+            print('Final cabling optimization...')
+            tic = time.time()
+            extra_vars.update(time_limit=tl_final, mip_gap=mip_gap_final, CableSolver=CableSolver_final)
+            lcoe_func(np.array(metrics_recorder['x_'+curzone][-1]), np.array(metrics_recorder['y_'+curzone][-1]),**extra_vars)
+            toc = time.time()
+            print('Final cabling optimization took: {:.0f}s'.format(toc-tic))
         
         # Store
-        extra_vars.update(metrics_recorder=metrics_recorder)
+        metrics_recorder = extra_vars['metrics_recorder']
         record_results_constraints(metrics_recorder, recorder, state, cost, min_spacing_m)
         
         # Save recorder to file
@@ -905,7 +925,7 @@ def evaluate_recorder():
             font_manager.fontManager.addfont(font)
         plt.rcParams["font.family"] = "Serif"
             
-        plot = XYPlotCompBathym(save_plot_per_iteration=True, plot_initial=True, memory=0, X=X_utm, Y=Y_utm, Z=Z, Sx=Sub_x, Sy=Sub_y, cables=cables_plot, metrics_recorder=metrics_recorder, Xn=xn, Yn=yn, b=boundplot, opt_nr=opt_nr, folder=plot_folder, sampling=sample, obj=obj, optimize=False, paper=True)
+        plot = XYPlotCompBathym(save_plot_per_iteration=True, plot_initial=True, memory=0, X=X_utm, Y=Y_utm, Z=Z, Sx=Sub_x, Sy=Sub_y, cables=cables_plot, metrics_recorder=metrics_recorder, Xn=xn, Yn=yn, b=boundplot, folder=plot_folder, sampling=sample, obj=obj, optimize=False, paper=True)
         inputs = {}
         curzone = metrics_recorder['cur_zone'][-1][-1]
         if curzone == 'all':
@@ -943,61 +963,61 @@ def evaluate_recorder():
     # plot_convergence(mr=metrics_recorder,item='cable_cost',plotstr='Cable Cost (€)',obj=0,overall=0,optfat=1)
     # plot_convergence(mr=metrics_recorder,item='mp_cost',plotstr='Monopile Cost (€)',obj=0,overall=0,optfat=1)
 #%% Compare Cabling
-def CompareCabling():
-    Files = ["test3_heuristic_processed",
-             "test3_metaheuristic_processed",
-             "test3_ortools_processed",
-             "test3_gurobi_processed",
-             "test3_cplex_cont_processed"]
-    CabOpt = ["heuristic","metaheuristic","ortools","gurobi","cplex"]
+# def CompareCabling():
+#     Files = ["test3_heuristic_processed",
+#              "test3_metaheuristic_processed",
+#              "test3_ortools_processed",
+#              "test3_gurobi_processed",
+#              "test3_cplex_cont_processed"]
+#     CabOpt = ["heuristic","metaheuristic","ortools","gurobi","cplex"]
     
-    fig, axs = plt.subplots(1, len(Sequence), figsize=(15, 4))
-    for i, zone in enumerate(Sequence):
-        ax = axs[i]
-        for f, File in enumerate(Files):
-        # File = "metric_recorder_cooperative_2D_6000it_processed"
-            # specify file you want to load
-            with open("C:\\Software\\IEA-Wind-2200-22-ROWP\\examples\\Results\\" + File + ".pkl", "rb") as file:
-                data = pickle.load(file)
-            mr = data['metrics_recorder']
-            item = 'lcoe'
-            # item = 'cable_cost'
-            plotstr = 'LCOE (€/MWh)'
-            # plotstr = 'Cable Cost (€)'
-            overall = 0
-            optfat = 0
-            obj = 0
+#     fig, axs = plt.subplots(1, len(Sequence), figsize=(15, 4))
+#     for i, zone in enumerate(Sequence):
+#         ax = axs[i]
+#         for f, File in enumerate(Files):
+#         # File = "metric_recorder_cooperative_2D_6000it_processed"
+#             # specify file you want to load
+#             with open("C:\\Software\\IEA-Wind-2200-22-ROWP\\examples\\Results\\" + File + ".pkl", "rb") as file:
+#                 data = pickle.load(file)
+#             mr = data['metrics_recorder']
+#             item = 'lcoe'
+#             # item = 'cable_cost'
+#             plotstr = 'LCOE (€/MWh)'
+#             # plotstr = 'Cable Cost (€)'
+#             overall = 0
+#             optfat = 0
+#             obj = 0
             
-            # plt.figure(figsize=(5, 3))
-            ax.plot(
-                np.array(mr['iteration'])[np.array([z[0] for z in mr['cur_zone']]) == zone],
-                np.array(mr[item + '_' + zone])[np.array([z[0] for z in mr['cur_zone']]) == zone],
-                label=zone + '_' + CabOpt[f],
-                linewidth=1
-            )
-            # plt.plot(np.array(mr['iteration']),[x if x!=0 else np.nan for x in mr[item+'_'+zone]], label=zone+'_' + CabOpt[f], linewidth = 1)
-            # plt.plot(np.array(mr['iteration']),[x if x!=0 else np.nan for x in mr[item+'_mid']], label='Mid_' + CabOpt[f], linewidth = 1)
-            # plt.plot(np.array(mr['iteration']),[x if x!=0 else np.nan for x in mr[item+'_south']], label='South_' + CabOpt[f], linewidth = 1)
-            if obj:
-                plt.plot(np.array(mr['iteration']),[x if x!=0 else np.nan for x in mr[item]], label='Overall', linewidth = 1)
-            if overall:
-                plt.plot(np.array(mr['iteration']),[x if x!=0 else np.nan for x in mr[item+'_all']], label='Overall', linewidth = 1)
-            if optfat:
-                for i in range(0,len(mr['lcoe_all'])-1):
-                    if i == 0 and f == len(Files)-1:
-                        leg = 'Current objective'
-                    else:
-                        leg = None
-                    if mr['opt_nr'][i] == mr['opt_nr'][i+1] and mr['cur_zone'][i][0] == 'mid':
-                        plt.plot(np.array(mr['iteration'][i:i+2])-1,
-                            np.array(mr[item+'_'+mr['cur_zone'][i][0]][i:i+2]), linestyle="--", linewidth = 0.8, color="black", label=leg)
-        FS = 9
-        ax.legend(fontsize=FS)
-        ax.grid()
-        ax.set_xlabel('Iteration',fontsize=FS)
-        ax.set_ylabel(plotstr,fontsize=FS)
-        ax.set_title(zone,fontsize=FS+2)
-        ax.tick_params(axis='both', labelsize=FS-1)
+#             # plt.figure(figsize=(5, 3))
+#             ax.plot(
+#                 np.array(mr['iteration'])[np.array([z[0] for z in mr['cur_zone']]) == zone],
+#                 np.array(mr[item + '_' + zone])[np.array([z[0] for z in mr['cur_zone']]) == zone],
+#                 label=zone + '_' + CabOpt[f],
+#                 linewidth=1
+#             )
+#             # plt.plot(np.array(mr['iteration']),[x if x!=0 else np.nan for x in mr[item+'_'+zone]], label=zone+'_' + CabOpt[f], linewidth = 1)
+#             # plt.plot(np.array(mr['iteration']),[x if x!=0 else np.nan for x in mr[item+'_mid']], label='Mid_' + CabOpt[f], linewidth = 1)
+#             # plt.plot(np.array(mr['iteration']),[x if x!=0 else np.nan for x in mr[item+'_south']], label='South_' + CabOpt[f], linewidth = 1)
+#             if obj:
+#                 plt.plot(np.array(mr['iteration']),[x if x!=0 else np.nan for x in mr[item]], label='Overall', linewidth = 1)
+#             if overall:
+#                 plt.plot(np.array(mr['iteration']),[x if x!=0 else np.nan for x in mr[item+'_all']], label='Overall', linewidth = 1)
+#             if optfat:
+#                 for i in range(0,len(mr['lcoe_all'])-1):
+#                     if i == 0 and f == len(Files)-1:
+#                         leg = 'Current objective'
+#                     else:
+#                         leg = None
+#                     if mr['opt_nr'][i] == mr['opt_nr'][i+1] and mr['cur_zone'][i][0] == 'mid':
+#                         plt.plot(np.array(mr['iteration'][i:i+2])-1,
+#                             np.array(mr[item+'_'+mr['cur_zone'][i][0]][i:i+2]), linestyle="--", linewidth = 0.8, color="black", label=leg)
+#         FS = 9
+#         ax.legend(fontsize=FS)
+#         ax.grid()
+#         ax.set_xlabel('Iteration',fontsize=FS)
+#         ax.set_ylabel(plotstr,fontsize=FS)
+#         ax.set_title(zone,fontsize=FS+2)
+#         ax.tick_params(axis='both', labelsize=FS-1)
     
     # plt.figure(figsize=(5, 3))
     # for zone in Sequence:
@@ -1069,7 +1089,7 @@ def evaluate_layout():
     
     plot_folder = "Figures//FinalResult"
     boundplot = list(boundaries.values())
-    plot = XYPlotCompBathym(save_plot_per_iteration=True, plot_initial=True, memory=0, X=X_utm, Y=Y_utm, Z=Z, Sx=Sub_x, Sy=Sub_y, cables=cables_plot, metrics_recorder=metrics_recorder, Xn=xn, Yn=yn, b=boundplot, opt_nr=opt_nr, folder=plot_folder, sampling=sample, obj=None, optimize=False, paper=True)
+    plot = XYPlotCompBathym(save_plot_per_iteration=True, plot_initial=True, memory=0, X=X_utm, Y=Y_utm, Z=Z, Sx=Sub_x, Sy=Sub_y, cables=cables_plot, metrics_recorder=metrics_recorder, Xn=xn, Yn=yn, b=boundplot, folder=plot_folder, sampling=sample, obj=None, optimize=False, paper=True)
     inputs = {}
     inputs['x'] = x_eva
     inputs['y'] = y_eva
@@ -1077,11 +1097,14 @@ def evaluate_layout():
       
 #%% Run
 if __name__ == "__main__":
-    # make sure the correct mass surrogate is stored
-    trainQLS()
-    if len(seeds) == 1:
-        opt_competitive(seeds[0],**extra_vars)
+    if Mode == "evaluate_recorder":
+        evaluate_recorder()
+    elif Mode == "competitive":
+        if len(seeds) == 1:
+            opt_competitive(seeds[0],**extra_vars)
+        else:
+            worker = partial(opt_competitive, **extra_vars)
+            with Pool(num_workers) as pool:
+                pool.map(worker,seeds)
     else:
-        worker = partial(opt_competitive, **extra_vars)
-        with Pool(num_workers) as pool:
-            pool.map(worker,seeds)
+        raise Exception("Mode not implemented yet.")
