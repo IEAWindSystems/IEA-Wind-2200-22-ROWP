@@ -75,13 +75,13 @@ from TopfarmAdvancedConstraints import CorrectedXYBoundaryConstraint, SpacingCon
 #
 #%% INPUTS
 # Parallelization
-seeds = [5,6]                           # random np seed for initial layout configuration. If more than 1, parallel execution.
-num_workers = 2                         # number of workers for parallel execution if len(seeds)>1 
+seeds = np.arange(1,51)                 # random np seed for initial layout configuration. If more than 1, parallel execution.
+num_workers = 25                        # number of workers for parallel execution if len(seeds)>1 
 
 # General inputs
 Mode = 'competitive'                    # 'cooperative' or 'competitive' or 'evaluate_recorder' or 'evaluate_multiter' or 'CompareCabling' or 'evaluate_layout'
 Continue = False                        # set to True if you give foregoing metrics_recorder to continue optimization
-File = 'test'                           # define name of files that is stored or loaded. the seed will be added as e.g. "_s3"
+File = 'comp'                           # define name of files that is stored or loaded. the seed will be added as e.g. "_s3"
 Sequence = ['north','mid','south']*4    # define sequence of zones for sequential design
 CableSolver_opt = 'MetaHeuristic'       # Cable solver using during nested optimization: 'Heuristic', 'MetaHeuristic', 'cplex', 'ortools' or 'gurobi'
 CableSolver_final = 'ortools'           # Cable solver used for final cabling plan optimization.
@@ -279,7 +279,7 @@ site.interp_method = 'linear'
 tl_opt = 0.3      # time limit during optimization
 tl_final = 3600   # time limit for final run
 mip_gap_opt = 0.005
-mip_gap_final = 0.001
+mip_gap_final = 0.0005
 cables = np.array(
     [(int(c["capacity_NrT"]), float(c["cost_€_m"])) for c in cable_specs],
     dtype=[("capacity", int), ("cost", float)])
