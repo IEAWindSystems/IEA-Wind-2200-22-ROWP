@@ -77,10 +77,18 @@ def record_cable_metrics(metrics_recorder, wfn, curzone, nnb, nb):
     metrics_recorder["cable_u_" + curzone].append(u_fnt)
     metrics_recorder["cable_v_" + curzone].append(v_fnt)
     metrics_recorder["cable_type_" + curzone].append(cab_data['cable'].tolist()) #([t[2]['cable'] for t in cab_data])
-    try:
-        metrics_recorder["cable_info"].append(wfn.solution_info())
-    except:
-        metrics_recorder["cable_info"].append([''])
+    # cable info for milp solvers
+    if metrics_recorder['current_settings'][-1]['curzone'] == 'all':
+        if curzone == metrics_recorder['sequence'][0]:
+            try:
+                metrics_recorder["cable_info"].append(wfn.solution_info())
+            except:
+                metrics_recorder["cable_info"].append([''])
+    else:
+        try:
+            metrics_recorder["cable_info"].append(wfn.solution_info())
+        except:
+            metrics_recorder["cable_info"].append([''])
     
     for zone in nnb:
         metrics_recorder["cable_u_" + zone].append([])
