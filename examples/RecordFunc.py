@@ -182,16 +182,13 @@ def record_results_constraints(metrics_recorder, recorder, state, cost, min_spac
     metrics_recorder["x_final"].append(state['x'].tolist())
     metrics_recorder["y_final"].append(state['y'].tolist())
     metrics_recorder["sgd_constraint_violation"] += recorder['sgd_constraint'].tolist()
-    metrics_recorder["sgd_constraint_violation"].append(metrics_recorder["sgd_constraint_violation"][-1])
     
     # min spacing constraint
     dv = np.sqrt(recorder['wtSeparationSquared']) - min_spacing_m
     dv[dv > 0] = 0
     metrics_recorder["tur_dist_violation"] += dv.sum(axis=1).tolist()
-    metrics_recorder["tur_dist_violation"].append(metrics_recorder["tur_dist_violation"][-1])
     
     # boundary constraint
     bv = recorder['boundaryDistances']
     bv[bv > 0] = 0
     metrics_recorder["bound_violation"] += bv.sum(axis=1).tolist()
-    metrics_recorder["bound_violation"].append(metrics_recorder["bound_violation"][-1])

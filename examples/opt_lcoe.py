@@ -481,7 +481,7 @@ min_spacing_m = d_RD * windTurbines.diameter()  #minimum inter-turbine spacing i
 metrics_recorder = create_recorder(Sequence)
 
 # Store setting
-metrics_recorder['general_settings'].append({'Mode':Mode,'Model':Model,'d_RD':d_RD,'tur_nr':tur_nr,'maxiter':maxiter,'sgd_thresh':sgd_thresh,'obj':obj,'Sequence':Sequence,'samps':samps,
+metrics_recorder['general_settings'].append({'Mode':Mode,'Model':Model,'d_RD':d_RD,'tur_nr':tur_nr,'maxiter':maxiter,'sgd_thresh':sgd_thresh,'obj':obj,'Sequence':Sequence,'samps':samps,'boundaries':boundaries,
                                      'depths':depths,'masses':masses,'CableSolver_opt':CableSolver_opt,'CableSolver_final':CableSolver_final,'tl_opt':tl_opt,'tl_final':tl_final,'mip_gap_opt':mip_gap_opt,'mip_gap_final':mip_gap_final}) 
 
 # Prepare kwargs (mutable for objective function + other required variables passed through functions) explicitly
@@ -734,14 +734,32 @@ def opt_cooperative(seed,*,Sequence,boundaries,File,metrics_recorder,Subs_x,Subs
     cost, state, recorder = tf.optimize()
     toc = time.time()
     print('Optimization with SGD took: {:.0f}s'.format(toc-tic), ' with a total constraint violation of ', recorder['sgd_constraint'][-1])
-
+    
+    # postprocess recorder
+    recorder = recorder.recorder2list()[1]['driver_iteration_dict']
+    recorder['sgd_constraint'] = np.array(recorder['sgd_constraint']).flatten()
+    recorder['wtSeparationSquared'] = np.array(recorder['wtSeparationSquared'])
+    recorder['boundaryDistances'] = np.array(recorder['boundaryDistances'])
+    
+    # Final cabling optimization
+    print('Final cabling optimization...')
+    tic = time.time()
+    extra_vars.update(time_limit=tl_final, mip_gap=mip_gap_final, CableSolver=CableSolver_final)
+    lcoe_func(state['x'], state['y'], **extra_vars)
+    toc = time.time()
+    print('Final cabling optimization took: {:.0f}s'.format(toc-tic))
+    # copy sgd recorder values
+    recorder['sgd_constraint'] = np.append(recorder['sgd_constraint'],recorder['sgd_constraint'][-1])
+    recorder['wtSeparationSquared'] = np.vstack([recorder['wtSeparationSquared'],recorder['wtSeparationSquared'][-1]])
+    recorder['boundaryDistances'] = np.vstack([recorder['boundaryDistances'],recorder['boundaryDistances'][-1]])
+            
     # Store
     metrics_recorder = extra_vars['metrics_recorder']
     record_results_constraints(metrics_recorder, recorder, state, cost, min_spacing_m)
     
     # Save to a file
     with open("Results//" + File + ".pkl", "wb") as file:
-        pickle.dump({"metrics_recorder": metrics_recorder, "state": state, "recorder": recorder.recorder2list()}, file)
+        pickle.dump({"metrics_recorder": metrics_recorder, "state": state, "recorder": recorder}, file)
         
     # Postprocess for full wind rose
     if sample:
@@ -879,6 +897,12 @@ def opt_competitive(seed,*,Sequence,boundaries,File,metrics_recorder,Subs_x,Subs
         toc = time.time()
         print('Optimization with SGD took: {:.0f}s'.format(toc-tic), ' with a total constraint violation of ', recorder['sgd_constraint'][-1])
         
+        # postprocess recorder
+        recorder = recorder.recorder2list()[1]['driver_iteration_dict']
+        recorder['sgd_constraint'] = np.array(recorder['sgd_constraint']).flatten()
+        recorder['wtSeparationSquared'] = np.array(recorder['wtSeparationSquared'])
+        recorder['boundaryDistances'] = np.array(recorder['boundaryDistances'])
+        
         # Final cabling optimization (last time zone is optimized...)
         if i == last_indices[curzone]:
             print('Final cabling optimization...')
@@ -887,15 +911,19 @@ def opt_competitive(seed,*,Sequence,boundaries,File,metrics_recorder,Subs_x,Subs
             lcoe_func(np.array(metrics_recorder['x_'+curzone][-1]), np.array(metrics_recorder['y_'+curzone][-1]),**extra_vars)
             toc = time.time()
             print('Final cabling optimization took: {:.0f}s'.format(toc-tic))
+            # copy sgd recorder values
+            recorder['sgd_constraint'] = np.append(recorder['sgd_constraint'],recorder['sgd_constraint'][-1])
+            recorder['wtSeparationSquared'] = np.vstack([recorder['wtSeparationSquared'],recorder['wtSeparationSquared'][-1]])
+            recorder['boundaryDistances'] = np.vstack([recorder['boundaryDistances'],recorder['boundaryDistances'][-1]])
         
         # Store
         metrics_recorder = extra_vars['metrics_recorder']
         record_results_constraints(metrics_recorder, recorder, state, cost, min_spacing_m)
-        
+
         # Save recorder to file
         with open("Results//" + File + ".pkl", "wb") as file:
-            pickle.dump({"metrics_recorder": metrics_recorder, "state": state, "recorder": recorder.recorder2list()}, file)
-   
+            pickle.dump({"metrics_recorder": metrics_recorder, "state": state, "recorder": recorder}, file)
+            
     # Postprocess for full wind rose
     if sample:
         print('Optimization finished.')
@@ -1113,11 +1141,60 @@ def evaluate_layout():
     inputs['x'] = x_eva
     inputs['y'] = y_eva
     plot.compute(inputs,[])
+#%% correct recorder
+def correct_recorder():
+    from collections import defaultdict
+    results = defaultdict(list)
+    for s in seeds:
+        try:
+            with open(f"Results/comp_s{s}.pkl", "rb") as file:
+                data = pickle.load(file)
+            mr = data["metrics_recorder"]
+    
+            # target keys to modify
+            keys_to_clean = ['bound_violation', 'sgd_constraint_violation', 'tur_dist_violation']
+            
+            # find all indices to remove (last occurrence of 1–9)
+            indices_to_remove = []
+            for val in range(1, 10):  # only 1 to 9
+                if val in mr['opt_nr']:
+                    last_idx = len(mr['opt_nr']) - 1 - mr['opt_nr'][::-1].index(val) + 1
+                    indices_to_remove.append(last_idx)
+            
+            # sort indices in descending order so deletion doesn’t shift earlier indices
+            indices_to_remove.sort(reverse=True)
+            
+            # delete entries from all lists
+            for idx in indices_to_remove:
+                for key in keys_to_clean:
+                    del mr[key][idx]
+           
+            # save corrected file
+            with open(f"Results/comp_s{s}.pkl", "wb") as file:
+                pickle.dump(data,file)
+            
+            # open processed file
+            with open(f"Results/comp_s{s}_processed.pkl", "rb") as file:
+                data2 = pickle.load(file)
+                
+            idxs = data2['metrics_recorder']['iteration']
+            data2['metrics_recorder']['sgd_constraint_violation'] = [data['metrics_recorder']['sgd_constraint_violation'][i] for i in idxs]
+            data2['metrics_recorder']['bound_violation'] = [data['metrics_recorder']['bound_violation'][i] for i in idxs]
+            data2['metrics_recorder']['tur_dist_violation'] = [data['metrics_recorder']['tur_dist_violation'][i] for i in idxs]
+
+            # save corrected file
+            with open(f"Results/comp_s{s}_processed.pkl", "wb") as file:
+                pickle.dump(data2,file)
+
+        except Exception as e:
+            results["failed_seed"].append(int(s))
       
 #%% Run
 if __name__ == "__main__":
     if Mode == "evaluate_recorder":
         evaluate_recorder()
+    elif Mode == "correct_recorder":
+        correct_recorder()
     elif Mode == "cooperative":
         if len(seeds) == 1:
             opt_cooperative(seeds[0],**extra_vars)
