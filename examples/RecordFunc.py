@@ -101,7 +101,7 @@ def record_cable_metrics(metrics_recorder, wfn, curzone, nnb, nb):
         metrics_recorder["cable_type_" + zone].append(metrics_recorder['cable_type_' + zone][-1])
 
 def record_main_metrics_multisub(metrics_recorder, opt_nr, aep, x, y, mp_cost, cable_costs, lcoe,
-                               curzone, nb, nnb, wf, tur_nr, cable_cost_n, mp_cost_n,
+                               curzone, nb, nnb, tur_nr, cable_cost_n, mp_cost_n,
                                npv, capex, LP, CRF, OpexAnnual, Sequence, **kwargs):
     metrics_recorder["iteration"].append(kwargs.get("iteration", len(metrics_recorder["iteration"]) + 1))
     metrics_recorder["opt_nr"].append(opt_nr)
@@ -111,7 +111,8 @@ def record_main_metrics_multisub(metrics_recorder, opt_nr, aep, x, y, mp_cost, c
     metrics_recorder["lcoe"].append(float(lcoe))
     metrics_recorder["cur_zone"].append([curzone])
     
-    indices = [np.arange(sum(tur_nr[:idx]), sum(tur_nr[:idx + 1])) for idx in range(len(wf))]
+    indices = [np.arange(sum(tur_nr[zone] for zone in Sequence[:i]),sum(tur_nr[zone] for zone in Sequence[:i+1])) for i in range(len(Sequence))]
+    
     for z, zone in enumerate(Sequence):
         metrics_recorder["neighbours"].append(nb)
         metrics_recorder["x_" + zone].append(x[indices[z]].flatten().tolist())
@@ -119,14 +120,14 @@ def record_main_metrics_multisub(metrics_recorder, opt_nr, aep, x, y, mp_cost, c
         metrics_recorder["aep_" + zone].append(aep.isel(wt=slice(min(indices[z]),max(indices[z]+1))).sum().item())
         metrics_recorder["cable_cost_" + zone].append(cable_costs[z])
         metrics_recorder["mp_cost_" + zone].append(float(sum(mp_cost[indices[z]])))
-        metrics_recorder["lcoe_" + zone].append(float(((capex*tur_nr[z] + sum(mp_cost[indices[z]]) + cable_costs[z] + LP*tur_nr[z]) * CRF + OpexAnnual*tur_nr[z]) / aep.isel(wt=slice(min(indices[z]),max(indices[z]+1))).sum().item()))
+        metrics_recorder["lcoe_" + zone].append(float(((capex*tur_nr[zone] + sum(mp_cost[indices[z]]) + cable_costs[z] + LP*tur_nr[zone]) * CRF + OpexAnnual*tur_nr[zone]) / aep.isel(wt=slice(min(indices[z]),max(indices[z]+1))).sum().item()))
     metrics_recorder["aep_all"].append(np.sum(aep).item())
     metrics_recorder["lcoe_all"].append(float(lcoe))
     metrics_recorder["cable_cost_all"].append(sum(cable_costs))
     metrics_recorder["mp_cost_all"].append(float(sum(mp_cost)))
 
 def record_main_metrics_singlesub(metrics_recorder, opt_nr, aep, x, y, mp_cost, cable_cost, lcoe,
-                               curzone, nb, nnb, wf, tur_nr, cable_cost_n, mp_cost_n,
+                               curzone, nb, nnb, tur_nr, cable_cost_n, mp_cost_n,
                                npv, capex, LP, CRF, OpexAnnual, **kwargs):
     metrics_recorder["iteration"].append(kwargs.get("iteration", len(metrics_recorder["iteration"]) + 1))
     metrics_recorder["opt_nr"].append(opt_nr)
@@ -141,7 +142,7 @@ def record_main_metrics_singlesub(metrics_recorder, opt_nr, aep, x, y, mp_cost, 
     metrics_recorder["neighbours"].append(nb)
     metrics_recorder["x_" + curzone].append(x.flatten().tolist())
     metrics_recorder["y_" + curzone].append(y.flatten().tolist())
-    metrics_recorder["aep_" + curzone].append(aep.isel(wt=slice(0,tur_nr[wf[curzone]])).sum().item())
+    metrics_recorder["aep_" + curzone].append(aep.isel(wt=slice(0,tur_nr[curzone])).sum().item())
     metrics_recorder["cable_cost_" + curzone].append(cable_cost)
     metrics_recorder["mp_cost_" + curzone].append(sum(mp_cost))
     metrics_recorder["lcoe_" + curzone].append(lcoe)
@@ -161,13 +162,13 @@ def record_main_metrics_singlesub(metrics_recorder, opt_nr, aep, x, y, mp_cost, 
         metrics_recorder["x_" + zone].append(metrics_recorder["x_" + zone][-1])
         metrics_recorder["y_" + zone].append(metrics_recorder["y_" + zone][-1])
         if n == 0:
-            aep_n = aep.isel(wt=slice(tur_nr[wf[curzone]],tur_nr[wf[curzone]] + tur_nr[wf[zone]])).sum().item()
+            aep_n = aep.isel(wt=slice(tur_nr[curzone],tur_nr[curzone] + tur_nr[zone])).sum().item()
         elif n == 1:
-            aep_n = aep.isel(wt=slice(tur_nr[wf[curzone]] + tur_nr[wf[nb[n-1]]],None)).sum().item()
+            aep_n = aep.isel(wt=slice(tur_nr[curzone] + tur_nr[nb[n-1]],None)).sum().item()
         metrics_recorder["aep_" + zone].append(aep_n)
         metrics_recorder["cable_cost_" + zone].append(cable_cost_n[n])
         metrics_recorder["mp_cost_" + zone].append(mp_cost_n[n])
-        npv_n = (capex*tur_nr[wf[zone]] + mp_cost_n[n] + cable_cost_n[n] + LP*tur_nr[wf[zone]]) * CRF + OpexAnnual*tur_nr[wf[zone]]
+        npv_n = (capex*tur_nr[zone] + mp_cost_n[n] + cable_cost_n[n] + LP*tur_nr[zone]) * CRF + OpexAnnual*tur_nr[zone]
         metrics_recorder["lcoe_" + zone].append(npv_n / aep_n)
         npv_all.append(npv_n)
     
