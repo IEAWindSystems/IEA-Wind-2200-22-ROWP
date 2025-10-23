@@ -1181,7 +1181,7 @@ def refine_opt_results(seed,*,Sequence,boundaries,File,metrics_recorder,Subs_x,S
             metrics_recorder['general_settings'].append(data['metrics_recorder']['general_settings'][-1])
             
             # general options
-            maxiter = 5
+            maxiter = 3000
             sgd_thresh = 0.9999
             sample = True
             CableOpt = 'multi_sub'
