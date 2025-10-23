@@ -1291,7 +1291,7 @@ def refine_opt_results(seed,*,Sequence,boundaries,File,metrics_recorder,Subs_x,S
         else:
             print('Constraints for seed ' + str(seed) + ' not violated.')
     except Exception:
-        print('No seed ' + str(seed))
+        print('Results for seed ' + str(seed) + ' do not exist.')
         
 
 #%% final seed evaluation
@@ -1299,11 +1299,18 @@ def evaluate_seeds():
     from collections import defaultdict
     results = defaultdict(list)
     for s in seeds:
+        # first check if results for the current seed exist
         try:
-            with open(f"Results/comp_s{s}_processed.pkl", "rb") as file:
-                data = pickle.load(file)
+            try:
+                # load the finetuned recorder (with enforced constraints) if it exists
+                with open(f"Results/comp_s{s}_processed_refined.pkl", "rb") as file:
+                    data = pickle.load(file)
+            except:
+                # otherwise, load the original file
+                # (constraints have not been violated for the final design or not yet been finetuned)
+                with open(f"Results/comp_s{s}_processed.pkl", "rb") as file:
+                    data = pickle.load(file)
             mr = data["metrics_recorder"]
-    
             # store main metrics
             results["seed"].append(int(s))
             results["lcoe_north"].append(float(mr["lcoe_north"][-1]))
@@ -1317,7 +1324,7 @@ def evaluate_seeds():
                 last_index = len(cur_zone) - 1 - cur_zone[::-1].index(zone)
                 results["dc_" + zone].append(mr["tur_dist_violation"][last_index])
                 results["bc" + zone].append(mr["bound_violation"][last_index])
-        except Exception as e:
+        except:
             results["failed_seed"].append(int(s))
     
     ConstraintFailed = 0
@@ -1445,7 +1452,7 @@ def correct_recorder():
             with open(f"Results/comp_s{s}_processed.pkl", "wb") as file:
                 pickle.dump(data2,file)
 
-        except Exception as e:
+        except:
             results["failed_seed"].append(int(s))
       
 #%% Run
