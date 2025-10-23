@@ -80,7 +80,17 @@ seeds = np.arange(1,51)                 # random np seed for initial layout conf
 num_workers = 25                        # number of workers for parallel execution if len(seeds)>1 
 
 # General inputs
-Mode = 'competitive'                    # 'cooperative' or 'competitive' or 'evaluate_recorder' or 'evaluate_multiter' or 'CompareCabling' or 'evaluate_layout'
+#
+# For Mode, pick from the following scenarios:
+# 'cooperative'         ...optimize the developed zones together in order to minimize/maximize the overall cluster objective
+# 'competitive'         ...optimize the developed zones sequentially in the indicated sequence. The farm respective KPI is the objective. Iterative sequential optimization is possible.
+# 'evaluate_recorder'   ...evaluate a certain file for convergence, incl. a final layout plot if desired
+# 'evaluate_multiter'   ...postprocess a file by evaluating the recorded layouts over the whole windrose (required when sampling was on during optimization and postprocessing was not automatically executed). Specify in which recorder intervals the layouts should be evaluated.
+# 'evaluate_layout'     ...evaluate a certain layout (incl. neighbours if needed) for the desired KPI
+# 'evaluate_seeds'      ...evaluate the recorders of multiple seeds to identify which seed performed the best and plot the distributions
+# 'refine_opt_results'  ...reoptimize unfeasible layouts (=constraint violations) by only enforcing the constraints and ignoring the objective
+#
+Mode = 'competitive'                    # 'cooperative' or 'competitive' or 'evaluate_recorder' or 'evaluate_multiter' or 'evaluate_layout' or 'evaluate_seeds' or 'refine_opt_results'
 Continue = False                        # set to True if you give foregoing metrics_recorder to continue optimization
 File = 'comp'                           # define name of files that is stored or loaded. the seed will be added as e.g. "_s3"
 Sequence = ['north','mid','south']*4    # define sequence of zones for sequential design
@@ -748,7 +758,7 @@ def opt_cooperative(seed,*,Sequence,boundaries,File,metrics_recorder,Subs_x,Subs
     recorder['sgd_constraint'] = np.append(recorder['sgd_constraint'],recorder['sgd_constraint'][-1])
     recorder['wtSeparationSquared'] = np.vstack([recorder['wtSeparationSquared'],recorder['wtSeparationSquared'][-1]])
     recorder['boundaryDistances'] = np.vstack([recorder['boundaryDistances'],recorder['boundaryDistances'][-1]])
-            
+    
     # Store
     metrics_recorder = extra_vars['metrics_recorder']
     record_results_constraints(metrics_recorder, recorder, state, cost, min_spacing_m)
@@ -1140,6 +1150,255 @@ def evaluate_layout():
     inputs['x'] = x_eva
     inputs['y'] = y_eva
     plot.compute(inputs,[])
+    
+#%% enforce constraints after optimization and conduct proper cable optimization
+def refine_opt_results(seed,*,Sequence,boundaries,File,metrics_recorder,Subs_x,Subs_y,X_utm,Y_utm,Z,cables_plot,obj,
+                    plot_each,windTurbines,tur_nr,maxiter,sgd_thresh,min_spacing_m,**extra_vars):
+    #
+    # Load file
+    try:
+        File += '_s' + str(seed) + '_processed'
+        with open("Results/" + File + ".pkl", "rb") as file:
+            data = pickle.load(file)
+        #
+        # First, check if constraints are violated.
+        # find last index of the respetively optimized zones
+        mr = data['metrics_recorder']
+        constr_violation = []
+        cur_zone = [n[0] for n in mr["cur_zone"]]
+        for zone in ['north','mid','south']:
+            last_index = len(cur_zone) - 1 - cur_zone[::-1].index(zone)
+            constr_violation.append(abs(mr["tur_dist_violation"][last_index]))
+            constr_violation.append(abs(mr["bound_violation"][last_index]))
+        
+        if sum(constr_violation) > 0:
+            # load data
+            Sequence =  list(dict.fromkeys(mr['sequence']))
+            
+            # create new metrics_recorder
+            metrics_recorder = create_recorder(Sequence)
+            metrics_recorder['general_settings'].append(data['metrics_recorder']['general_settings'][-1])
+            
+            # general options
+            maxiter = 5
+            sgd_thresh = 0.9999
+            sample = True
+            CableOpt = 'multi_sub'
+            boundplot = list(boundaries.values())
+            plot_folder = "Figures//" + File + "_refined"
+            opt_nr = data['metrics_recorder']['opt_nr'][-1] + 1
+            curzone = 'all'
+            Sx = [Subs_x[zone] for zone in Sequence]
+            Sy = [Subs_y[zone] for zone in Sequence]
+            nf = False
+            nb = []
+            nnb = []
+            cable_cost_n = [0,0]
+            mp_cost_n = [0,0]
+            learning_rate = windTurbines.diameter()*0.1
+            seed = data['metrics_recorder']['current_settings'][-1]['seed']
+            
+            # Layout from foregoing optimization
+            x0 = np.array([])
+            y0 = np.array([])
+            for zone in list(dict.fromkeys(data['metrics_recorder']['sequence'])):
+                x0 = np.concatenate([x0, data['metrics_recorder']['x_' + zone][-1]])
+                y0 = np.concatenate([y0, data['metrics_recorder']['y_' + zone][-1]])
+        
+            # Constraints
+            boundary_constraint = MultiWFBoundaryConstraint(
+                geometry = [boundaries[name] for name in Sequence],  # Boundary mapping
+                wt_groups=[np.arange(sum(tur_nr[zone] for zone in Sequence[:i]),sum(tur_nr[zone] for zone in Sequence[:i+1])) for i in range(len(Sequence))],  # Turbine groups
+                boundtype = BoundaryType.POLYGON
+            )
+            aggregated_constraints = DistanceConstraintAggregation(boundary_constraint, sum([tur_nr[zone] for zone in Sequence]), min_spacing_m, windTurbines)
+        
+            # Plot or not
+            if plot_iter:
+                plot_comp = XYPlotCompBathym(save_plot_per_iteration=True, plot_initial=True, memory=0, X=X_utm, Y=Y_utm, Z=Z, Sx=Subs_x, Sy=Subs_y, cables=cables_plot, metrics_recorder=metrics_recorder, b=boundplot, folder=plot_folder, sampling=sample, obj=obj, ploteach=plot_each)
+            else:
+                plot_comp = None
+            
+            # Max or min
+            if obj == 'lcoe':
+                maximize = False
+            elif obj == 'aep':
+                maximize = True
+        
+            # record settings
+            [metrics_recorder[key].append(None) for key in ["sgd_constraint_violation", "tur_dist_violation", "bound_violation"]]   # first run: no optimization
+            metrics_recorder['current_settings'].append({'seed':seed,'learning_rate':learning_rate,'curzone':curzone,'x0':x0,'y0':y0,'sample':sample,'CableOpt':CableOpt,'Sx':Sx,'Sy':Sy})
+            
+            # update kwargs
+            extra_vars.update(Sx=Sx, Sy=Sy, curzone=curzone, nb=nb, nnb=nnb, cable_cost_n=cable_cost_n, mp_cost_n=mp_cost_n, opt_nr=opt_nr, nf=nf, sample=sample, time_limit=tl_opt, mip_gap=mip_gap_opt,
+                              CableOpt=CableOpt, File=File, metrics_recorder=metrics_recorder, Sequence=Sequence, obj=obj, tur_nr=tur_nr, boundaries=boundaries, X_utm=X_utm, Y_utm=Y_utm, Z=Z, cables_plot=cables_plot, CableSolver=CableSolver_opt)
+            
+            # define cost and gradient function with handed over extra_vars
+            cost_func = partial(lcoe_func, **extra_vars)
+            cost_grad_func = partial(lcoe_jac, **extra_vars)
+            
+            # Optimization setup
+            tf = TopFarmProblem(
+                    design_vars = {'x':x0.tolist(), 'y':y0.tolist()},         
+                    cost_comp = CostModelComponent(input_keys=['x','y'], n_wt=sum([tur_nr[zone] for zone in Sequence]), cost_function=cost_func, objective=True, cost_gradient_function=cost_grad_func, maximize=maximize),
+                    constraints = aggregated_constraints, 
+                    driver = EasySGDDriver(maxiter=maxiter, learning_rate=learning_rate, speedupSGD=True, sgd_thresh=sgd_thresh),
+                    plot_comp = plot_comp
+                    )
+            
+            # Run
+            tic = time.time()
+            cost, state, recorder = tf.optimize()
+            toc = time.time()
+            print('Optimization with SGD took: {:.0f}s'.format(toc-tic), ' with a total constraint violation of ', recorder['sgd_constraint'][-1])
+            
+            # postprocess recorder
+            recorder = recorder.recorder2list()[1]['driver_iteration_dict']
+            recorder['sgd_constraint'] = np.array(recorder['sgd_constraint']).flatten()
+            recorder['wtSeparationSquared'] = np.array(recorder['wtSeparationSquared'])
+            recorder['boundaryDistances'] = np.array(recorder['boundaryDistances'])
+            
+            # Final cabling optimization
+            print('Final cabling optimization...')
+            tic = time.time()
+            extra_vars.update(time_limit=tl_final, mip_gap=mip_gap_final, CableSolver=CableSolver_final)
+            lcoe_func(state['x'], state['y'], **extra_vars)
+            toc = time.time()
+            print('Final cabling optimization took: {:.0f}s'.format(toc-tic))
+            # copy sgd recorder values
+            recorder['sgd_constraint'] = np.append(recorder['sgd_constraint'],recorder['sgd_constraint'][-1])
+            recorder['wtSeparationSquared'] = np.vstack([recorder['wtSeparationSquared'],recorder['wtSeparationSquared'][-1]])
+            recorder['boundaryDistances'] = np.vstack([recorder['boundaryDistances'],recorder['boundaryDistances'][-1]])
+            
+            # Store
+            metrics_recorder = extra_vars['metrics_recorder']
+            record_results_constraints(metrics_recorder, recorder, state, cost, min_spacing_m)
+            
+            # Save to a file
+            with open("Results//" + File + "_refined_raw.pkl", "wb") as file:
+                pickle.dump({"metrics_recorder": metrics_recorder, "state": state, "recorder": recorder}, file)
+                
+            # Postprocess for full wind rose
+            if sample:
+                print('Optimization finished.')
+                print('Starting postprocessing...')
+                extra_vars.update(Subs_x=Subs_x,Subs_y=Subs_y)
+                metrics_recorder = postprocess_recorder(metrics_recorder,**extra_vars)
+                # Save processed file
+                with open("Results//" + File + "_refined.pkl", "wb") as file:
+                    pickle.dump({"metrics_recorder": metrics_recorder}, file)
+        else:
+            print('Constraints for seed ' + str(seed) + ' not violated.')
+    except Exception:
+        print('No seed ' + str(seed))
+        
+
+#%% final seed evaluation
+def evaluate_seeds():
+    from collections import defaultdict
+    results = defaultdict(list)
+    for s in seeds:
+        try:
+            with open(f"Results/comp_s{s}_processed.pkl", "rb") as file:
+                data = pickle.load(file)
+            mr = data["metrics_recorder"]
+    
+            # store main metrics
+            results["seed"].append(int(s))
+            results["lcoe_north"].append(float(mr["lcoe_north"][-1]))
+            results["lcoe_mid"].append(float(mr["lcoe_mid"][-1]))
+            results["lcoe_south"].append(float(mr["lcoe_south"][-1]))
+            results["lcoe_all"].append(float(mr["lcoe_all"][-1]))
+    
+            # find last index of the respetively optimized zones
+            cur_zone = [n[0] for n in mr["cur_zone"]]
+            for zone in ['north','mid','south']:
+                last_index = len(cur_zone) - 1 - cur_zone[::-1].index(zone)
+                results["dc_" + zone].append(mr["tur_dist_violation"][last_index])
+                results["bc" + zone].append(mr["bound_violation"][last_index])
+        except Exception as e:
+            results["failed_seed"].append(int(s))
+    
+    ConstraintFailed = 0
+    for idx in range(len(results['bcmid'])-1,-1,-1):
+        cur_constraints = []
+        for zone in ['north','mid','south']:
+            cur_constraints.append(abs(results["dc_" + zone][idx]))
+            cur_constraints.append(abs(results["bc" + zone][idx]))
+        if sum(cur_constraints) > 0:
+            for key, lst in results.items():
+                if key != "failed_seed":
+                    lst.pop(idx)
+            ConstraintFailed += 1
+            
+
+    #%% Plot
+    from matplotlib.ticker import ScalarFormatter
+    
+    # Extract lists from results
+    lcoe_north = results["lcoe_north"]
+    lcoe_mid   = results["lcoe_mid"]
+    lcoe_south = results["lcoe_south"]
+    lcoe_all   = results["lcoe_all"]
+    
+    all_lcoes = [lcoe_north, lcoe_mid, lcoe_south, lcoe_all]
+    labels = ["LCOE North", "LCOE Mid", "LCOE South", "LCOE All"]
+    colors = ["skyblue", "lightgreen", "orange", "lightgray"]
+    
+    # Find indices of minima for each metric
+    min_indices = [[i for i, v in enumerate(arr) if v == min(arr)] for arr in all_lcoes]
+    
+    # Collect marker values
+    marker_values = []
+    for idx_list in min_indices:
+        scenario_values = [[arr[i] for i in idx_list] for arr in all_lcoes]
+        marker_values.append(scenario_values)
+    
+    print("Seeds corresponding to minima:\n")
+    
+    for source_label, indices in zip(labels, min_indices):
+        print(f"Minima source: {source_label}")
+        for idx in indices:
+            seed_num = results["seed"][idx]  # actual seed number
+            seed_values = [arr[idx] for arr in all_lcoes]  # LCOE values for all metrics at this seed
+            print(f"  Seed {seed_num}: LCOE North={seed_values[0]:.2f}, "
+                  f"Mid={seed_values[1]:.2f}, South={seed_values[2]:.2f}, All={seed_values[3]:.2f}")
+
+    # Create subplots
+    fig, axes = plt.subplots(2, 2, figsize=(9, 6))
+    axes = axes.flatten()
+    
+    for ax, values, label, color, metric_markers in zip(axes, all_lcoes, labels, colors, zip(*marker_values)):
+        counts, bins, patches = ax.hist(values, bins=20, alpha=0.7, color=color, edgecolor='black')
+        ax.set_title(label)
+        ax.set_xlabel("LCOE [$/MWh]")
+        ax.set_ylabel("Frequency")
+        ax.grid(True, linestyle='--', alpha=0.6)
+    
+        # Force plain numbers on x-axis
+        formatter = ScalarFormatter(useOffset=False)
+        formatter.set_scientific(False)
+        ax.xaxis.set_major_formatter(formatter)
+    
+        # Add markers
+        y_marker = max(counts) * 0.035
+        for mvals, mcolor in zip(metric_markers, colors):
+            ax.scatter(
+                mvals,
+                [y_marker]*len(mvals),
+                color=mcolor,
+                edgecolor='black',
+                linewidth=0.8,
+                marker='v',
+                s=90,
+                zorder=5
+            )
+    
+    plt.tight_layout()
+    plt.show()
+
+    return results
+            
 #%% correct recorder
 def correct_recorder():
     from collections import defaultdict
@@ -1192,10 +1451,19 @@ def correct_recorder():
 if __name__ == "__main__":
     if Mode == "evaluate_recorder":
         evaluate_recorder()
+    elif Mode == "evaluate_seeds":
+        results = evaluate_seeds()
     elif Mode == "evaluate_multiter":
         evaluate_multiter()
     elif Mode == "correct_recorder":
         correct_recorder()
+    elif Mode == "refine_opt_results":
+        if len(seeds) == 1:
+            refine_opt_results(seeds[0],**extra_vars)
+        else:
+            worker = partial(refine_opt_results, **extra_vars)
+            with Pool(num_workers) as pool:
+                pool.map(worker,seeds)
     elif Mode == "cooperative":
         if len(seeds) == 1:
             opt_cooperative(seeds[0],**extra_vars)
