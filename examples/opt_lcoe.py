@@ -76,8 +76,9 @@ from TopfarmAdvancedConstraints import DistanceConstraintAggregation as Distance
 #
 #%% INPUTS
 # Parallelization
-seeds = np.arange(1,51)                 # random np seed for initial layout configuration. If more than 1, parallel execution.
-num_workers = 25                        # number of workers for parallel execution if len(seeds)>1 
+# seeds = [3]
+seeds = np.arange(1,101)        # random np seed for initial layout configuration. If more than 1, parallel execution.
+num_workers = 25                # number of workers for parallel execution if len(seeds)>1 
 
 # General inputs
 #
@@ -90,20 +91,20 @@ num_workers = 25                        # number of workers for parallel executi
 # 'evaluate_seeds'      ...evaluate the recorders of multiple seeds to identify which seed performed the best and plot the distributions
 # 'refine_opt_results'  ...reoptimize unfeasible layouts (=constraint violations) by only enforcing the constraints and ignoring the objective
 #
-Mode = 'competitive'                    # 'cooperative' or 'competitive' or 'evaluate_recorder' or 'evaluate_multiter' or 'evaluate_layout' or 'evaluate_seeds' or 'refine_opt_results'
-Continue = False                        # set to True if you give foregoing metrics_recorder to continue optimization
-File = 'comp'                           # define name of files that is stored or loaded. the seed will be added as e.g. "_s3"
-Sequence = ['north','mid','south']*4    # define sequence of zones for sequential design
-CableSolver_opt = 'MetaHeuristic'       # Cable solver using during nested optimization: 'Heuristic', 'MetaHeuristic', 'cplex', 'ortools' or 'gurobi'
-CableSolver_final = 'ortools'           # Cable solver used for final cabling plan optimization.
-Model = 'turbopark'                     # 'jensen', 'gauss' or 'turbopark'
-tur_nr = {"north": 33, "mid": 33, "south": 34}
-obj = 'lcoe'                            # 'lcoe' or 'aep'
-plot_iter = True                        # True or False: plot and store layouts during optimization each plot_each iterations
-plot_postpro = True                     # True or False: plot and store layouts during postprocessing (how often is linked to step)
-plot_each = 100                         # define in which interval a plot should be made
-d_RD = 6                                # min spacing distance in rotor diameters
-step = 250                              # at each "step" iterations, the full wind rose is recalculated in postprocessing (when sampling is used during opt)
+Mode = 'competitive'                            # 'cooperative' or 'competitive' or 'evaluate_recorder' or 'evaluate_multiter' or 'evaluate_layout' or 'evaluate_seeds' or 'refine_opt_results'
+Continue = False                                # set to True if you give foregoing metrics_recorder to continue optimization
+File = 'comp'                                   # define name of files that is stored or loaded. the seed will be added as e.g. "_s3"
+Sequence = ['north','mid','south']*4            # define sequence of zones for sequential design
+CableSolver_opt = 'MetaHeuristic'               # Cable solver using during nested optimization: 'Heuristic', 'MetaHeuristic', 'cplex', 'ortools' or 'gurobi'
+CableSolver_final = 'ortools'                   # Cable solver used for final cabling plan optimization.
+Model = 'turbopark'                             # 'jensen', 'gauss' or 'turbopark'
+tur_nr = {"north": 33, "mid": 33, "south": 34}  # turbine number assigned to each zone
+obj = 'lcoe'                                    # 'lcoe' or 'aep'
+plot_iter = True                                # True or False: plot and store layouts during optimization each plot_each iterations
+plot_postpro = True                             # True or False: plot and store layouts during postprocessing (how often is linked to step)
+plot_each = 100                                  # define in which interval a plot should be made
+d_RD = 6                                        # min spacing distance in rotor diameters
+step = 250                                      # at each "step" iterations, the full wind rose is recalculated in postprocessing (when sampling is used during opt)
 
 # plot lims
 xlim = None                             # specify xlim for convergence plot or put None
