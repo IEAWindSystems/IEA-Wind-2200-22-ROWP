@@ -296,9 +296,6 @@ cables_plot = np.array([[c["diameter_mm2"], c["capacity_NrT"], c["cost_€_m"]] 
 # results and figure folders
 os.makedirs("Results", exist_ok=True)
 os.makedirs("Figures", exist_ok=True)
-# create empty figure if plot_iter is on and optimization should run
-if plot_iter and (Mode == 'cooperative' or Mode == 'competitive'):
-    plt.figure()
     
 # defaults
 # neighbour wind farm with turbine coordinates and costs to consider
@@ -705,6 +702,7 @@ def opt_cooperative(seed,*,Sequence,boundaries,File,metrics_recorder,Subs_x,Subs
 
     # Plot or not
     if plot_iter:
+        plt.figure()
         plot_comp = XYPlotCompBathym(save_plot_per_iteration=True, plot_initial=True, memory=0, X=X_utm, Y=Y_utm, Z=Z, Sx=Subs_x, Sy=Subs_y, cables=cables_plot, metrics_recorder=metrics_recorder, b=boundplot, folder=plot_folder, sampling=sample, obj=obj, ploteach=plot_each)
     else:
         plot_comp = None
@@ -859,6 +857,7 @@ def opt_competitive(seed,*,Sequence,boundaries,File,metrics_recorder,Subs_x,Subs
         
         # Plot or not
         if plot_iter:
+            plt.figure()
             plot_comp = XYPlotCompBathym(save_plot_per_iteration=True, plot_initial=True, memory=0, X=X_utm, Y=Y_utm, Z=Z, Sx=Subs_x, Sy=Subs_y, cables=cables_plot, metrics_recorder=metrics_recorder, Xn=xn, Yn=yn, b=boundplot, opt_nr=opt_nr, folder=plot_folder, sampling=sample, obj=obj, ploteach=plot_each)
         else:
             plot_comp = None
@@ -1145,6 +1144,7 @@ def evaluate_layout():
     res = lcoe_func(x_eva,y_eva,**extra_vars)
     
     plot_folder = "Figures//FinalResult"
+    plt.figure()
     boundplot = list(boundaries.values())
     plot = XYPlotCompBathym(save_plot_per_iteration=True, plot_initial=True, memory=0, X=X_utm, Y=Y_utm, Z=Z, Sx=Subs_x, Sy=Subs_y, cables=cables_plot, metrics_recorder=metrics_recorder, Xn=xn, Yn=yn, b=boundplot, folder=plot_folder, sampling=sample, obj=None, optimize=False, paper=True)
     inputs = {}
@@ -1216,6 +1216,7 @@ def refine_opt_results(seed,*,Sequence,boundaries,File,metrics_recorder,Subs_x,S
         
             # Plot or not
             if plot_iter:
+                plt.figure()
                 plot_comp = XYPlotCompBathym(save_plot_per_iteration=True, plot_initial=True, memory=0, X=X_utm, Y=Y_utm, Z=Z, Sx=Subs_x, Sy=Subs_y, cables=cables_plot, metrics_recorder=metrics_recorder, b=boundplot, folder=plot_folder, sampling=sample, obj=obj, ploteach=plot_each)
             else:
                 plot_comp = None
