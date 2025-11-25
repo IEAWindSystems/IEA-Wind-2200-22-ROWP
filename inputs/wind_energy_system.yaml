@@ -1,8 +1,8 @@
-name: IEA Wind 2200-22-MW Reference Offshore Wind Plant (system)
+name: IEA Wind 2200-22-MW Reference Offshore Wind Plant (system definition)
 site: !include site.yaml
 wind_farm: !include ROWP.yaml
 attributes:
-  net_AEP: 3385.51
-  analyses:
-    wake_model:
-      name: Jensen
+  flow_model:
+    name: pywake
+  # analysis: !include analysis.yaml
+  net_AEP: 3385.51 # to be updated!

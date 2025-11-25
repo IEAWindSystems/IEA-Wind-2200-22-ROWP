@@ -1,4 +1,4 @@
-name: IEA Wind Task 37 22MW Offshore Reference Turbine
+name: IEA Wind 22MW Offshore Reference Turbine (WISDEM performance)
 performance:
   rated_power: 22000000
   cutin_wind_speed: 3.0
