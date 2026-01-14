@@ -53,7 +53,7 @@ from py_wake.site import XRSite
 from py_wake.wind_turbines import WindTurbine
 from py_wake.wind_turbines.power_ct_functions import PowerCtTabular
 from py_wake import NOJ, Nygaard_2022
-from py_wake.literature import Bastankhah_PorteAgel_2014
+from py_wake.literature import Bastankhah_PorteAgel_2014, Niayifar_PorteAgel_2016
 from py_wake.rotor_avg_models import RotorCenter
 from topfarm.cost_models.cost_model_wrappers import CostModelComponent
 from topfarm import TopFarmProblem
@@ -184,8 +184,10 @@ windTurbines = WindTurbine(name=farm_dat['turbines']['name'], diameter=rd, hub_h
 # wake model
 if Model == 'jensen':
     wake_model = NOJ(site, windTurbines, k=0.05, rotorAvgModel=RotorCenter())
-elif Model == 'gauss':
+elif Model == 'gauss2014':
     wake_model = Bastankhah_PorteAgel_2014(site, windTurbines, rotorAvgModel=RotorCenter(), turbulenceModel=CrespoHernandez(), k=0.0324555)
+elif Model == 'gauss2016':
+    wake_model = Niayifar_PorteAgel_2016(site, windTurbines, rotorAvgModel=RotorCenter(), turbulenceModel=CrespoHernandez(rotorAvgModel=RotorCenter()))
 elif Model == 'turbopark':
     wake_model = Nygaard_2022(site, windTurbines)
     
@@ -310,7 +312,7 @@ import matplotlib.font_manager as font_manager
 font_dir = ["font\Serif"]
 for font in font_manager.findSystemFonts(font_dir):
     font_manager.fontManager.addfont(font)
-plt.rcParams["font.family"] = "Serif"
+plt.rcParams["font.family"] = "CMU Serif"
 plt.rcParams['svg.fonttype'] = 'path'
 #
 #%% Function to create the random sampling of wind speed and wind directions
@@ -326,7 +328,7 @@ def sampling():
 def opt_cabling(x=None,y=None,Sx=None,Sy=None,cables=None,CableSolver='MetaHeuristic',time_limit=0.3, mip_gap=0.005):
     if CableSolver in ['cplex', 'ortools', 'gurobi']:
         # warm start
-        wfn = WindFarmNetwork(turbinesC=np.column_stack((x, y)),substationsC=np.column_stack((Sx, Sy)),cables=cables,router=HGSRouter(time_limit=0.3))
+        wfn = WindFarmNetwork(turbinesC=np.column_stack((x,y)),substationsC=np.column_stack((Sx, Sy)),cables=cables,router=HGSRouter(time_limit=0.3))
         wfn.optimize()
         # chosen router
         wfn.optimize(router=MILPRouter(solver_name=CableSolver, time_limit=time_limit, mip_gap=mip_gap, verbose=False))
@@ -538,7 +540,7 @@ def plot_convergence(mr=None,item=None,plotstr=None,obj=1,overall=0,optfat=0,fea
         # legend
         line1, label1 = ax.get_legend_handles_labels()
         line2, label2 = ax2.get_legend_handles_labels()
-        ax.legend(line1 + line2, label1 + label2, fontsize=FS,ncol=2)
+        ax.legend(line1 + line2, label1 + label2, fontsize=FS,ncol=2,loc='upper right')
         if ylim2: ax2.set_ylim(ylim2)
     else:
         ax.legend(fontsize=FS)
@@ -979,7 +981,7 @@ def evaluate_recorder():
         font_dir = ["font\Serif"]
         for font in font_manager.findSystemFonts(font_dir):
             font_manager.fontManager.addfont(font)
-        plt.rcParams["font.family"] = "Serif"
+        plt.rcParams["font.family"] = "CMU Serif"
             
         plot = XYPlotCompBathym(save_plot_per_iteration=True, plot_initial=True, memory=0, X=X_utm, Y=Y_utm, Z=Z, Sx=Subs_x, Sy=Subs_y, cables=cables_plot, metrics_recorder=metrics_recorder, Xn=xn, Yn=yn, b=boundplot, folder=plot_folder, sampling=sample, obj=obj, optimize=False, paper=True)
         inputs = {}
@@ -1000,13 +1002,16 @@ def evaluate_recorder():
         plot.compute(inputs,[])
         
         plt.gcf().subplots_adjust(
-            top=0.995,
-            bottom=0.088,
+            top=0.999,
+            bottom=0.083,
             left=0.0,
-            right=0.83,
+            right=0.925,
             hspace=0.2,
             wspace=0.2
         )
+        fig = plt.gcf()
+        fig.set_size_inches(16 / 2.54, fig.get_size_inches()[1])
+        
         plt.gcf().savefig("Figures//FinalLayout.pdf", dpi=500, pad_inches=0)
         
         # plt.text(555000, 5842000, 'N', color='white', fontsize=22, ha='center', va='center')
@@ -1241,10 +1246,10 @@ def refine_opt_results(seed,*,Sequence,boundaries,File,metrics_recorder,Subs_x,S
             
             # Optimization setup
             tf = TopFarmProblem(
-                    design_vars = {'x':x0.tolist(), 'y':y0.tolist()},         
+                    design_vars = {'x':x0, 'y':y0},         
                     cost_comp = CostModelComponent(input_keys=['x','y'], n_wt=sum([tur_nr[zone] for zone in Sequence]), cost_function=cost_func, objective=True, cost_gradient_function=cost_grad_func, maximize=maximize),
                     constraints = aggregated_constraints, 
-                    driver = EasySGDDriver(maxiter=maxiter, learning_rate=learning_rate, speedupSGD=True, sgd_thresh=sgd_thresh),
+                    driver = EasySGDDriver(maxiter=maxiter, learning_rate=float(learning_rate), speedupSGD=True, sgd_thresh=sgd_thresh),
                     plot_comp = plot_comp
                     )
             
@@ -1299,6 +1304,9 @@ def refine_opt_results(seed,*,Sequence,boundaries,File,metrics_recorder,Subs_x,S
 def evaluate_seeds():
     from collections import defaultdict
     results = defaultdict(list)
+    obj = "lcoe"
+    objplot = "LCOE"
+    scaler = 1
     for s in seeds:
         # first check if results for the current seed exist
         try:
@@ -1314,17 +1322,18 @@ def evaluate_seeds():
             mr = data["metrics_recorder"]
             # store main metrics
             results["seed"].append(int(s))
-            results["lcoe_north"].append(float(mr["lcoe_north"][-1]))
-            results["lcoe_mid"].append(float(mr["lcoe_mid"][-1]))
-            results["lcoe_south"].append(float(mr["lcoe_south"][-1]))
-            results["lcoe_all"].append(float(mr["lcoe_all"][-1]))
+            results[obj+"_north"].append(float(mr[obj+"_north"][-1])*scaler)
+            results[obj+"_mid"].append(float(mr[obj+"_mid"][-1])*scaler)
+            results[obj+"_south"].append(float(mr[obj+"_south"][-1])*scaler)
+            results[obj+"_all"].append(float(mr[obj+"_all"][-1])*scaler)
     
             # find last index of the respetively optimized zones
             cur_zone = [n[0] for n in mr["cur_zone"]]
-            for zone in ['north','mid','south']:
-                last_index = len(cur_zone) - 1 - cur_zone[::-1].index(zone)
-                results["dc_" + zone].append(mr["tur_dist_violation"][last_index])
-                results["bc" + zone].append(mr["bound_violation"][last_index])
+            for zone in ['north','mid','south','all']:
+                if zone in cur_zone:
+                    last_index = len(cur_zone) - 1 - cur_zone[::-1].index(zone)
+                    results["dc_" + zone].append(mr["tur_dist_violation"][last_index])
+                    results["bc" + zone].append(mr["bound_violation"][last_index])
         except:
             results["failed_seed"].append(int(s))
     
@@ -1335,23 +1344,23 @@ def evaluate_seeds():
             cur_constraints.append(abs(results["dc_" + zone][idx]))
             cur_constraints.append(abs(results["bc" + zone][idx]))
         if sum(cur_constraints) > 0:
+            results["violated_seeds"].append(int(results['seed'][idx]))
             for key, lst in results.items():
-                if key != "failed_seed":
+                if key != "failed_seed" and key != "violated_seeds":
                     lst.pop(idx)
             ConstraintFailed += 1
-            
 
     #%% Plot
     from matplotlib.ticker import ScalarFormatter
     
     # Extract lists from results
-    lcoe_north = results["lcoe_north"]
-    lcoe_mid   = results["lcoe_mid"]
-    lcoe_south = results["lcoe_south"]
-    lcoe_all   = results["lcoe_all"]
+    lcoe_north = results[obj+"_north"]
+    lcoe_mid   = results[obj+"_mid"]
+    lcoe_south = results[obj+"_south"]
+    lcoe_all   = results[obj+"_all"]
     
     all_lcoes = [lcoe_north, lcoe_mid, lcoe_south, lcoe_all]
-    labels = ["LCOE North", "LCOE Mid", "LCOE South", "LCOE All"]
+    labels = [objplot+" North", objplot+" Mid", objplot+" South", objplot+" All"]
     colors = ["skyblue", "lightgreen", "orange", "lightgray"]
     
     # Find indices of minima for each metric
@@ -1380,7 +1389,10 @@ def evaluate_seeds():
     for ax, values, label, color, metric_markers in zip(axes, all_lcoes, labels, colors, zip(*marker_values)):
         counts, bins, patches = ax.hist(values, bins=20, alpha=0.7, color=color, edgecolor='black')
         ax.set_title(label)
-        ax.set_xlabel("LCOE [$/MWh]")
+        if obj == 'lcoe':
+            ax.set_xlabel("LCOE [$/MWh]")
+        elif obj == 'aep':
+            ax.set_xlabel("AEP [GWh]")
         ax.set_ylabel("Frequency")
         ax.grid(True, linestyle='--', alpha=0.6)
     

@@ -238,7 +238,7 @@ class XYPlotCompBathym(ExplicitComponent):
         
     def plot_cables(self,x,y):
         # CabName = ['Cable A=' + str(round(self.cables[0][0])) + 'mm²','Cable A=' + str(round(self.cables[1][0])) + 'mm²','Cable A=' + str(round(self.cables[2][0])) + 'mm²']
-        CabName = [f'Cable A={round(c[0])}mm²' for c in self.cables]
+        CabName = [f'Cable A={round(c[0])}mm$^2$' for c in self.cables]
         # go through the different zones
         plot2 = 0           # helper to plot legend of cable types only once
         cabplot = [0,0,0]   #            - " -
