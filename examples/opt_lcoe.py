@@ -159,7 +159,7 @@ site = XRSite(
                         {'Sector_frequency': ('wd', freq['data']), 
                          'Weibull_A': ('wd', A['data']), 
                          'Weibull_k': ('wd', k['data']),
-                         'TI': ('ws', [0,0] + TI_org + [0,0])   # add dummies to avoid interpolation errors during sampling
+                         'TI': ('ws', [0.05]*2 + TI_org + [0.05]*2)   # add dummies to avoid interpolation errors during sampling
                          },
                       coords={'wd': wd_wb, 'ws': [0,ws_TI[0]-0.01] + ws_TI + [ws_TI[-1]+0.01,100]}))
 
@@ -324,7 +324,7 @@ def sampling():
     A = As[ind]
     k = ks[ind]
     ws = A * np.random.weibull(k)
-    ti = np.interp(ws, ws_TI, TI_org, left=0.0, right=0.0)
+    ti = np.interp(ws, ws_TI, TI_org, left=0.05, right=0.05)    # dummy values outside operating range to avoid site interpolation errors
     return wd, ws, ti
 
 #%% Cabling optimization
