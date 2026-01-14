@@ -77,8 +77,8 @@ from TopfarmAdvancedConstraints import DistanceConstraintAggregation as Distance
 #%% INPUTS
 # Parallelization
 # seeds = [3]
-seeds = np.arange(1,101)        # random np seed for initial layout configuration. If more than 1, parallel execution.
-num_workers = 25                # number of workers for parallel execution if len(seeds)>1 
+seeds = np.arange(1,250)        # random np seed for initial layout configuration. If more than 1, parallel execution.
+num_workers = 48                # number of workers for parallel execution if len(seeds)>1 
 
 # General inputs
 #
@@ -93,14 +93,14 @@ num_workers = 25                # number of workers for parallel execution if le
 #
 Mode = 'competitive'                            # 'cooperative' or 'competitive' or 'evaluate_recorder' or 'evaluate_multiter' or 'evaluate_layout' or 'evaluate_seeds' or 'refine_opt_results'
 Continue = False                                # set to True if you give foregoing metrics_recorder to continue optimization
-File = 'comp'                                   # define name of files that is stored or loaded. the seed will be added as e.g. "_s3"
-Sequence = ['north','mid','south']*4            # define sequence of zones for sequential design
+File = 'comp_TI'                                   # define name of files that is stored or loaded. the seed will be added as e.g. "_s3"
+Sequence = ['north','mid','south']*5            # define sequence of zones for sequential design
 CableSolver_opt = 'MetaHeuristic'               # Cable solver using during nested optimization: 'Heuristic', 'MetaHeuristic', 'cplex', 'ortools' or 'gurobi'
 CableSolver_final = 'ortools'                   # Cable solver used for final cabling plan optimization.
 Model = 'turbopark'                             # 'jensen', 'gauss' or 'turbopark'
 tur_nr = {"north": 33, "mid": 33, "south": 34}  # turbine number assigned to each zone
 obj = 'lcoe'                                    # 'lcoe' or 'aep'
-plot_iter = True                                # True or False: plot and store layouts during optimization each plot_each iterations
+plot_iter = False                                # True or False: plot and store layouts during optimization each plot_each iterations
 plot_postpro = True                             # True or False: plot and store layouts during postprocessing (how often is linked to step)
 plot_each = 100                                  # define in which interval a plot should be made
 d_RD = 6                                        # min spacing distance in rotor diameters
@@ -151,17 +151,17 @@ resource_dat = system_dat['site']['energy_resource']
 A = resource_dat['wind_resource']['weibull_a']
 k = resource_dat['wind_resource']['weibull_k']
 freq = resource_dat['wind_resource']['sector_probability']
-wd = resource_dat['wind_resource']['wind_direction']
-# ws = resource_dat['wind_resource']['wind_speed']
+wd_wb = resource_dat['wind_resource']['wind_direction']
 TI =  resource_dat['wind_resource']['turbulence_intensity']['data']
+ws_TI = resource_dat['wind_resource']['wind_speed']
 site = XRSite(
        ds=xr.Dataset(data_vars=
                         {'Sector_frequency': ('wd', freq['data']), 
                          'Weibull_A': ('wd', A['data']), 
                          'Weibull_k': ('wd', k['data']),
-                         'TI': TI
+                         'TI': ('ws', TI)
                          },
-                      coords={'wd': wd}))
+                      coords={'wd': wd_wb, 'ws': ws_TI}))
 
 # define turbine
 hh = farm_dat['turbines']['hub_height']
@@ -196,6 +196,7 @@ dirs = np.arange(0, 360, 1) #wind directions
 ws = np.arange(cut_in, cut_out+1, 1)
 freqs = site.local_wind([0], [0], wd=dirs, ws=ws).P_ilk[0, :, :].sum(1)     # all frequencies
 freqs = freqs / freqs.sum()
+TI = np.interp(ws, ws_TI, TI)
 
 # for sampling:
 As = site.local_wind([0], [0], wd=dirs, ws=ws).Weibull_A_ilk[0, :, 0]               #weibull A
@@ -256,7 +257,7 @@ if MP_data == 'Surrogate':
     def mean_wind_speed(A, k):
         return A * sp.gamma(1 + 1/k)
     V_ave = []
-    for i in range(len(wd)):
+    for i in range(len(wd_wb)):
         V_ave.append(mean_wind_speed(A['data'][i],k['data'][i]))
     V_ave = np.sum(np.array(V_ave) * np.array(freq['data']))
     masses = []
@@ -351,7 +352,7 @@ def lcoe_func(x, y, **kwargs):
         wd_current, ws_current = sampling()
         Time = True
     else:
-        wd_current = np.arange(0, 360, 1)
+        wd_current = args.dirs
         ws_current = args.ws
         Time = False
     if args.nf:
@@ -499,7 +500,7 @@ extra_vars = dict(
     Sequence=Sequence, boundaries=boundaries, File=File,Subs_x=Subs_x, Subs_y=Subs_y, X_utm=X_utm, Y_utm=Y_utm, Z=Z, cables=cables, cables_plot=cables_plot,
     obj=obj, plot_each=plot_each, windTurbines=windTurbines, Mode=Mode, tur_nr=tur_nr, maxiter=maxiter, sgd_thresh=sgd_thresh, step=step,
     samps=samps, CableSolver_opt=CableSolver_opt, CableSolver_final=CableSolver_final, tl_opt=tl_opt, tl_final=tl_final, mip_gap_opt=mip_gap_opt, mip_gap_final=mip_gap_final, wake_model=wake_model,
-    min_spacing_m=min_spacing_m, cable_cost_n=cable_cost_n, mp_cost_n=mp_cost_n, ws=ws, TI =TI, d=d, life=life, LP=LP, capex=capex, OpexAnnual=OpexAnnual,
+    min_spacing_m=min_spacing_m, cable_cost_n=cable_cost_n, mp_cost_n=mp_cost_n, ws=ws, dirs=dirs, TI =TI, d=d, life=life, LP=LP, capex=capex, OpexAnnual=OpexAnnual,
     polynomial_gradients=polynomial_gradients, polynomial=polynomial, get_depth_grads=get_depth_grads, depth_interp=depth_interp
 )
 #%% Convergence plotting script
@@ -1123,15 +1124,8 @@ def evaluate_recorder():
     # plt.yticks(fontsize=FS-1)
 #%% Evaluate layout
 def evaluate_layout():
-    # x_eva = [550507.3,551004.3,552353.3,551501.3,552850.3,550010.3,552353.3,553915.3,553986.3,553986.3,559453.3,553986.3,551501.3,554057.3,555619.3,555619.3,555619.3,555619.3,556684.3,555690.3,555619.3,555619.3,555619.3,555690.3,557181.3,557749.3,558033.3,558104.3,559311.3,557465.3,557394.3,558033.3,558885.3]
-    # y_eva = [5841236.0,5842585.0,5836621.0,5837686.0,5841591.0,5839603.0,5844218.0,5846064.0,5836692.0,5839745.0,5849898.0,5844076.0,5839319.0,5834491.0,5833639.0,5835485.0,5836834.0,5839035.0,5834704.0,5841804.0,5843934.0,5846135.0,5848123.0,5832716.0,5849969.0,5840242.0,5842088.0,5843934.0,5848265.0,5848123.0,5838325.0,5850963.0,5846135.0]
-    # from matlab (best layout):
-    # x_eva = [555889.0664,555661.8664,553730.6664,554525.8664,557593.0664,552253.8664,556229.8664,554185.0664,550322.6664,551345.0664,559524.2664,556002.6664,556797.8664,552594.6664,549300.2664,557820.2664,556911.4664,554412.2664,553276.2664,551004.2664,558047.4664,558161.0664,555207.4664,552481.0664,558388.2664,552935.4664,555548.2664,558956.2664,556570.6664,554753.0664,559297.0664,556911.4664,558956.2664]
-    # y_eva = [5833653.166,5837969.966,5834902.766,5833880.366,5839333.166,5836833.966,5844104.366,5839333.166,5839219.566,5837969.966,5849670.766,5841037.166,5835243.566,5840923.566,5840469.166,5840923.566,5836833.966,5842513.966,5845240.366,5842513.966,5842741.166,5851147.566,5845694.766,5844104.366,5844558.766,5835925.166,5832630.766,5846489.966,5848080.366,5847057.966,5848193.966,5849670.766,5850579.566]
-    # benchmark from this optimization code:
-    # x_eva=[550138.93628142,549259.97124703,551947.1687341,551019.50470179,553801.57761174,550508.20477946,551773.18524297,554633.28768032,553717.07111651,552856.50282707,554997.27299282,552460.96597628,553006.20209499,554242.14168257,555573.09986941,556563.82476249,556932.45031753,557538.99869909,555410.58799388,554852.39596903,557683.80991463,556552.40023336,555594.99499565,556896.35505898,557230.10925774,557844.72557715,558155.13816112,558470.59021471,558975.42699074,559585.90789837,558953.69877364,558353.63201273,559276.98154229]
-    # y_eva=[5839398.84857337,5840513.67240592,5837104.40069435,5838282.78628338,5839364.62296964,5842008.46254412,5843523.87890845,5833698.25831585,5834861.06881341,5835951.85926047,5837961.09093571,5841081.87001151,5845001.13167038,5846482.04930752,5832507.51262233,5834245.45600763,5835810.9687916,5838975.57066336,5841687.83415406,5843776.80017039,5844991.23114793,5846610.60971491,5848103.08146724,5849660.05563233,5837356.21944075,5840574.79147581,5842202.57087209,5843855.86226534,5846500.73447366,5849700.21857155,5850583.80185068,5851407.91239366,5848083.88552206]
-    with open("Results\wesc_res_comp_6D_S2_12it_processed.pkl","rb") as file:
+    # define
+    with open("Results\comp_s75_processed.pkl","rb") as file:
         data = pickle.load(file)
     metrics_recorder=data['metrics_recorder']
     extra_vars['metrics_recorder'] = metrics_recorder
@@ -1140,14 +1134,19 @@ def evaluate_layout():
     y_eva = metrics_recorder['y_north'][-1]
     xn = metrics_recorder['x_mid'][-1] + metrics_recorder['x_south'][-1]
     yn = metrics_recorder['y_mid'][-1] + metrics_recorder['y_south'][-1]
+    nf = True
     # xn = []
     # yn = []
     nb = ['mid','south']
     nnb = []
     Sx = [Subs_x[curzone]]
     Sy = [Subs_y[curzone]]
+    
+    # run
+    extra_vars.update(xn=xn, yn=yn, nf=nf, curzone=curzone, nb=nb, nnb=nnb, Sx=Sx, Sy=Sy, sample=False, opt_nr=1, CableOpt="single_sub", CableSolver=CableSolver_opt, time_limit=tl_opt, mip_gap=mip_gap_opt)
     res = lcoe_func(x_eva,y_eva,**extra_vars)
     
+    # plot
     plot_folder = "Figures//FinalResult"
     plt.figure()
     boundplot = list(boundaries.values())
@@ -1156,7 +1155,6 @@ def evaluate_layout():
     inputs['x'] = x_eva
     inputs['y'] = y_eva
     plot.compute(inputs,[])
-    
 #%% enforce constraints after optimization and conduct proper cable optimization
 def refine_opt_results(seed,*,Sequence,boundaries,File,metrics_recorder,Subs_x,Subs_y,X_utm,Y_utm,Z,cables_plot,obj,
                     plot_each,windTurbines,tur_nr,maxiter,sgd_thresh,min_spacing_m,**extra_vars):
@@ -1478,6 +1476,8 @@ if __name__ == "__main__":
         evaluate_multiter()
     elif Mode == "correct_recorder":
         correct_recorder()
+    elif Mode == "evaluate_layout":
+        evaluate_layout()
     elif Mode == "refine_opt_results":
         if len(seeds) == 1:
             refine_opt_results(seeds[0],**extra_vars)
