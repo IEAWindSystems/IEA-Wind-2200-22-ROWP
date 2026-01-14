@@ -152,16 +152,16 @@ A = resource_dat['wind_resource']['weibull_a']
 k = resource_dat['wind_resource']['weibull_k']
 freq = resource_dat['wind_resource']['sector_probability']
 wd_wb = resource_dat['wind_resource']['wind_direction']
-TI =  resource_dat['wind_resource']['turbulence_intensity']['data']
+TI_org =  resource_dat['wind_resource']['turbulence_intensity']['data']
 ws_TI = resource_dat['wind_resource']['wind_speed']
 site = XRSite(
        ds=xr.Dataset(data_vars=
                         {'Sector_frequency': ('wd', freq['data']), 
                          'Weibull_A': ('wd', A['data']), 
                          'Weibull_k': ('wd', k['data']),
-                         'TI': ('ws', TI)
+                         'TI': ('ws', [0,0] + TI_org + [0,0])   # add dummies to avoid interpolation errors during sampling
                          },
-                      coords={'wd': wd_wb, 'ws': ws_TI}))
+                      coords={'wd': wd_wb, 'ws': [0,ws_TI[0]-0.01] + ws_TI + [ws_TI[-1]+0.01,100]}))
 
 # define turbine
 hh = farm_dat['turbines']['hub_height']
@@ -196,7 +196,7 @@ dirs = np.arange(0, 360, 1) #wind directions
 ws = np.arange(cut_in, cut_out+1, 1)
 freqs = site.local_wind([0], [0], wd=dirs, ws=ws).P_ilk[0, :, :].sum(1)     # all frequencies
 freqs = freqs / freqs.sum()
-TI = np.interp(ws, ws_TI, TI)
+TI = np.interp(ws, ws_TI, TI_org)
 
 # for sampling:
 As = site.local_wind([0], [0], wd=dirs, ws=ws).Weibull_A_ilk[0, :, 0]               #weibull A
@@ -318,12 +318,14 @@ plt.rcParams['svg.fonttype'] = 'path'
 #
 #%% Function to create the random sampling of wind speed and wind directions
 def sampling():
+    # todo: use inputs only, no global variables!
     ind = np.random.choice(np.arange(dirs.size), samps, p=freqs)
     wd = dirs[ind]
     A = As[ind]
     k = ks[ind]
     ws = A * np.random.weibull(k)
-    return wd, ws
+    ti = np.interp(ws, ws_TI, TI_org, left=0.0, right=0.0)
+    return wd, ws, ti
 
 #%% Cabling optimization
 def opt_cabling(x=None,y=None,Sx=None,Sy=None,cables=None,CableSolver='MetaHeuristic',time_limit=0.3, mip_gap=0.005):
@@ -349,16 +351,17 @@ def lcoe_func(x, y, **kwargs):
     #
     # 1.) aep
     if args.sample:
-        wd_current, ws_current = sampling()
+        wd_current, ws_current, TI_current = sampling()
         Time = True
     else:
         wd_current = args.dirs
         ws_current = args.ws
+        TI_current = args.TI
         Time = False
     if args.nf:
-        aep = args.wake_model(x=np.concatenate((x,args.xn)), y=np.concatenate((y,args.yn)), wd=wd_current, ws=ws_current, TI=args.TI, time=Time).aep() * 1e3
+        aep = args.wake_model(x=np.concatenate((x,args.xn)), y=np.concatenate((y,args.yn)), wd=wd_current, ws=ws_current, TI=TI_current, time=Time).aep() * 1e3
     else:
-        aep = args.wake_model(x=x, y=y, wd=wd_current, ws=ws_current, TI=args.TI, time=Time).aep() * 1e3
+        aep = args.wake_model(x=x, y=y, wd=wd_current, ws=ws_current, TI=TI_current, time=Time).aep() * 1e3
     #
     # 2.) monopile costs
     depths = args.depth_interp(x, y)
@@ -420,6 +423,7 @@ def lcoe_func(x, y, **kwargs):
     kwargs["dmp_cost"]["value"] = dmp_cost
     kwargs["wd_current"]["value"] = wd_current
     kwargs["ws_current"]["value"] = ws_current
+    kwargs["TI_current"]["value"] = TI_current
     kwargs["Time"]["value"] = Time
     #
     if args.obj == 'lcoe':
@@ -445,9 +449,9 @@ def lcoe_jac(x, y, **kwargs):
     #
     # 1.) aep
     if args.nf:
-        daep = args.wake_model.aep_gradients(gradient_method=autograd, wrt_arg=['x', 'y'], x=np.concatenate((x,args.xn)), y=np.concatenate((y,args.yn)), ws=args.ws_current["value"], TI=args.TI, wd=args.wd_current["value"], time=args.Time["value"])[:args.tur_nr[args.curzone],:args.tur_nr[args.curzone]] * 1e3
+        daep = args.wake_model.aep_gradients(gradient_method=autograd, wrt_arg=['x', 'y'], x=np.concatenate((x,args.xn)), y=np.concatenate((y,args.yn)), ws=args.ws_current["value"], TI=args.TI_current["value"], wd=args.wd_current["value"], time=args.Time["value"])[:args.tur_nr[args.curzone],:args.tur_nr[args.curzone]] * 1e3
     else:
-        daep = args.wake_model.aep_gradients(gradient_method=autograd, wrt_arg=['x', 'y'], x=x, y=y, ws=args.ws_current["value"], TI=args.TI, wd=args.wd_current["value"], time=args.Time["value"]) * 1e3
+        daep = args.wake_model.aep_gradients(gradient_method=autograd, wrt_arg=['x', 'y'], x=x, y=y, ws=args.ws_current["value"], TI=args.TI_current["value"], wd=args.wd_current["value"], time=args.Time["value"]) * 1e3
     #
     # 2.) monopile costs
     # have been calculated earlier (global variable)
@@ -495,7 +499,7 @@ metrics_recorder['general_settings'].append({'Mode':Mode,'Model':Model,'d_RD':d_
 extra_vars = dict(
     # mutable trackers
     metrics_recorder=metrics_recorder, aep={"value": None}, cable_cost={"value": None},dcable_cost={"value": None}, mp_cost={"value": None},
-    dmp_cost={"value": None},wd_current={"value": None}, ws_current={"value": None}, Time={"value": None},
+    dmp_cost={"value": None},wd_current={"value": None}, ws_current={"value": None}, TI_current={"value": None}, Time={"value": None},
     # other required variables
     Sequence=Sequence, boundaries=boundaries, File=File,Subs_x=Subs_x, Subs_y=Subs_y, X_utm=X_utm, Y_utm=Y_utm, Z=Z, cables=cables, cables_plot=cables_plot,
     obj=obj, plot_each=plot_each, windTurbines=windTurbines, Mode=Mode, tur_nr=tur_nr, maxiter=maxiter, sgd_thresh=sgd_thresh, step=step,
