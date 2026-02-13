@@ -43,6 +43,8 @@ from multiprocessing import Pool
 from scipy.interpolate import RegularGridInterpolator
 from types import SimpleNamespace
 import os
+import copy
+
 os.environ["OPENMDAO_WORKDIR"] = os.path.join(os.path.dirname(__file__), ".openmdao_out")
 #
 # ---
@@ -100,11 +102,11 @@ CableSolver_final = 'ortools'                   # Cable solver used for final ca
 Model = 'turbopark'                             # 'jensen', 'gauss' or 'turbopark'
 tur_nr = {"north": 33, "mid": 33, "south": 34}  # turbine number assigned to each zone
 obj = 'lcoe'                                    # 'lcoe' or 'aep'
-plot_iter = False                                # True or False: plot and store layouts during optimization each plot_each iterations
+plot_iter = True                                # True or False: plot and store layouts during optimization each plot_each iterations
 plot_postpro = True                             # True or False: plot and store layouts during postprocessing (how often is linked to step)
-plot_each = 100                                  # define in which interval a plot should be made
+plot_each = 500                                  # define in which interval a plot should be made
 d_RD = 6                                        # min spacing distance in rotor diameters
-step = 250                                      # at each "step" iterations, the full wind rose is recalculated in postprocessing (when sampling is used during opt)
+step = 500                                      # at each "step" iterations, the full wind rose is recalculated in postprocessing (when sampling is used during opt)
 
 # plot lims
 xlim = None                             # specify xlim for convergence plot or put None
@@ -370,9 +372,9 @@ def lcoe_func(x, y, **kwargs):
     for water_depth in depths:
         dmasses.append(args.polynomial_gradients(water_depth))
         masses.append(args.polynomial(water_depth))
-    mp_cost = 3 * np.array(masses)  # from ORBIT 2025 monopile_steel_cost default
+    mp_cost = 3.636 * 0.924 * np.array(masses)  # from ORBIT 2025 monopile_steel_cost default
     dmasses = (np.array(dmasses) * args.get_depth_grads(x, y)[:, 0, :].T)    # gradients (for function later, to avoid double calculus)
-    dmp_cost = 3 * dmasses          # from ORBIT 2025 tp_steel_cost default
+    dmp_cost = 3.636 * 0.924 * dmasses          # from ORBIT 2025 tp_steel_cost default
     #
     # 3.) Cable costs
     if args.CableOpt == 'multi_sub':
@@ -789,6 +791,8 @@ def opt_cooperative(seed,*,Sequence,boundaries,File,metrics_recorder,Subs_x,Subs
 #%% Competitive design
 def opt_competitive(seed,*,Sequence,boundaries,File,metrics_recorder,Subs_x,Subs_y,X_utm,Y_utm,Z,cables_plot,obj,
                     plot_each,windTurbines,tur_nr,maxiter,sgd_thresh,min_spacing_m,**extra_vars):
+    # make sure that extra_vars is only updated for the current run
+    extra_vars = copy.deepcopy(extra_vars)
     # metrics_recorder, File
     if Continue:
         print('---- !! Careful, starting from foregoing design !! ----')
