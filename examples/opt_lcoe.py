@@ -44,6 +44,7 @@ from scipy.interpolate import RegularGridInterpolator
 from types import SimpleNamespace
 import os
 import copy
+import gc
 
 os.environ["OPENMDAO_WORKDIR"] = os.path.join(os.path.dirname(__file__), ".openmdao_out")
 #
@@ -312,7 +313,7 @@ if Mode == 'cooperative':
     
 # update font to latex
 import matplotlib.font_manager as font_manager
-font_dir = ["font\Serif"]
+font_dir = [r"font\Serif"]
 for font in font_manager.findSystemFonts(font_dir):
     font_manager.fontManager.addfont(font)
 plt.rcParams["font.family"] = "CMU Serif"
@@ -954,7 +955,11 @@ def opt_competitive(seed,*,Sequence,boundaries,File,metrics_recorder,Subs_x,Subs
             
     # Plot LCOE iterations
     plot_convergence(mr=metrics_recorder,item='lcoe',plotstr='LCOE (€/MWh)',obj=0,overall=1,optfat=1,feas=1)
-
+    
+    # delete variables (to avoid memory accumulation problems)
+    del seed, Sequence, boundaries, File, metrics_recorder, Subs_x, Subs_y, X_utm, Y_utm, Z, cables_plot, obj, plot_each, windTurbines, tur_nr, maxiter, sgd_thresh, min_spacing_m, extra_vars
+    gc.collect()
+    
 #%% Manually start postprocessing
 def evaluate_multiter():
     with open("Results\\" + File + ".pkl", "rb") as file:
@@ -987,7 +992,7 @@ def evaluate_recorder():
         plt.figure()
         
         import matplotlib.font_manager as font_manager
-        font_dir = ["font\Serif"]
+        font_dir = [r"font\Serif"]
         for font in font_manager.findSystemFonts(font_dir):
             font_manager.fontManager.addfont(font)
         plt.rcParams["font.family"] = "CMU Serif"
@@ -1133,7 +1138,7 @@ def evaluate_recorder():
 #%% Evaluate layout
 def evaluate_layout():
     # define
-    with open("Results\comp_s75_processed.pkl","rb") as file:
+    with open(r"Results\comp_s75_processed.pkl","rb") as file:
         data = pickle.load(file)
     metrics_recorder=data['metrics_recorder']
     extra_vars['metrics_recorder'] = metrics_recorder
