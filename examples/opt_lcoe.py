@@ -229,27 +229,13 @@ Z = np.array(system_dat['site']['Bathymetry']['elevation']['data'])
 # Transfer from LongLat to UTM (km)
 X_utm = utm.from_latlon(np.ones(len(Y))*X[0],Y)
 Y_utm = utm.from_latlon(X,np.ones(len(X))*Y[0])
-# Create grids
-lon_grid, lat_grid = np.meshgrid(Y, X)
-# Convert to UTM
-Easting, Northing, _, _ = utm.from_latlon(lat_grid, lon_grid)
-# Flip arrays if necessary
-if not np.all(np.diff(Easting[0, :]) > 0):
-    Easting = np.fliplr(Easting)
-    Z = np.fliplr(Z)
-if not np.all(np.diff(Northing[:, 0]) > 0):
-    Northing = np.flipud(Northing)
-    Z = np.flipud(Z)
-# Extract coordinate arrays
-northing_values = Northing[:, 0]  # Corresponds to axis 0 of Z
-easting_values = Easting[0, :]    # Corresponds to axis 1 of Z
-# Ensure arrays are sorted
-assert np.all(np.diff(northing_values) > 0), "Northing values are not strictly increasing."
-assert np.all(np.diff(easting_values) > 0), "Easting values are not strictly increasing."
-# Create the interpolator
-interpolator = RegularGridInterpolator((northing_values, easting_values), -Z, method='linear')
-def depth_interp(x, y):
-    return interpolator(np.array([y, x]).T)
+# Get UTM zone from a single point
+_, _, zone_number, zone_letter = utm.from_latlon(X[0], Y[0])
+# Build interpolator in (lat, lon)
+interpolator = RegularGridInterpolator((X, Y), -Z, method="linear")
+def depth_interp(easting, northing):
+    lat, lon = utm.to_latlon(easting, northing, zone_number, zone_letter)
+    return interpolator(np.column_stack((lat, lon)))
 
 # Calculate monopile mass for different water depth
 if MP_data == 'Surrogate':
