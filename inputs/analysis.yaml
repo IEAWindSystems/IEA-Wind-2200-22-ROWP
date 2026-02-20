@@ -1,6 +1,6 @@
 #pywake and foxes
 wind_deficit_model:
-  name: TurboGaussianDeficit
+  name: TurbOPark
   A: 0.04
   cTI: [1.5, 0.8]
   ceps: 0.25
