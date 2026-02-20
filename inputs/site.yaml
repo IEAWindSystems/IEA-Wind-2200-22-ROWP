@@ -15,4 +15,4 @@ boundaries:
         }
     ]
 energy_resource: !include wind_resource.yaml
-Bathymetry: !include Bathymetry_EMODnet.nc
+bathymetry: !include Bathymetry_EMODnet.nc

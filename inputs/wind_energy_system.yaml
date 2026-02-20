@@ -4,5 +4,4 @@ wind_farm: !include ROWP.yaml
 attributes:
   flow_model:
     name: pywake
-  # analysis: !include analysis.yaml
-  net_AEP: 3385.51 # to be updated!
+  analysis: !include analysis.yaml
