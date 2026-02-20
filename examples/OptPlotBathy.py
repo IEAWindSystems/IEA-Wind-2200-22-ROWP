@@ -129,7 +129,7 @@ class XYPlotCompBathym(ExplicitComponent):
         self.ax.set_ylim(ylim)
         
     def plot_bathymetry(self):
-        CS = self.ax.contourf(self.X[0], self.Y[1], -self.Z, 100, cmap=plt.colormaps.get_cmap('Blues'))
+        CS = self.ax.contourf(self.X[0], self.Y[1], self.Z, 100, cmap=plt.colormaps.get_cmap('Blues'))
         CS.set_linewidth(0)  # Or use a list of widths if you need different values per level
         CS.set_edgecolor('face')  # Alternatively, you could use this to turn off edges
         if self.paper:

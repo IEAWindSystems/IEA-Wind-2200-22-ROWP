@@ -205,12 +205,11 @@ TI = np.interp(ws, ws_TI, TI_org)
 As = site.local_wind([0], [0], wd=dirs, ws=ws).Weibull_A_ilk[0, :, 0]               #weibull A
 ks = site.local_wind([0], [0], wd=dirs, ws=ws).Weibull_k_ilk[0, :, 0]               #weibull k
 
-# Boundaries and substations
-b = system_dat['site']
-Subs_x_raw = system_dat['wind_farm']['electrical_substations']['electrical_substation']['coordinates']['x']
-Subs_y_raw = system_dat['wind_farm']['electrical_substations']['electrical_substation']['coordinates']['y']
 # Mapping for wind farms to indices
 wf = {"north": 0,"mid": 1,"south": 2}
+
+# Boundaries
+b = system_dat['site']
 boundaries = {
     name: np.array([
         b['boundaries']['polygons'][index]['x'],
@@ -218,21 +217,23 @@ boundaries = {
     ]).T
     for name, index in wf.items()
 }
-Subs_x = {name: Subs_x_raw[index] for name, index in wf.items()}
-Subs_y = {name: Subs_y_raw[index] for name, index in wf.items()}
+
+# Substations
+Subs_x = {name: farm_dat['electrical_substations'][index]['electrical_substation']['coordinates']['x'][0] for name, index in wf.items()}
+Subs_y = {name: farm_dat['electrical_substations'][index]['electrical_substation']['coordinates']['y'][0] for name, index in wf.items()}
 
 #%% Setup monopile calculus and optimizer
 # Bathymetry
-X = np.array(system_dat['site']['Bathymetry']['latitude'])
-Y = np.array(system_dat['site']['Bathymetry']['longitude'])
-Z = np.array(system_dat['site']['Bathymetry']['elevation']['data'])
+X = np.array(system_dat['site']['bathymetry']['latitude'])
+Y = np.array(system_dat['site']['bathymetry']['longitude'])
+Z = np.array(system_dat['site']['bathymetry']['depth']['data'])
 # Transfer from LongLat to UTM (km)
 X_utm = utm.from_latlon(np.ones(len(Y))*X[0],Y)
 Y_utm = utm.from_latlon(X,np.ones(len(X))*Y[0])
 # Get UTM zone from a single point
 _, _, zone_number, zone_letter = utm.from_latlon(X[0], Y[0])
 # Build interpolator in (lat, lon)
-interpolator = RegularGridInterpolator((X, Y), -Z, method="linear")
+interpolator = RegularGridInterpolator((X, Y), Z, method="linear")
 def depth_interp(easting, northing):
     lat, lon = utm.to_latlon(easting, northing, zone_number, zone_letter)
     return interpolator(np.column_stack((lat, lon)))
@@ -241,7 +242,7 @@ def depth_interp(easting, northing):
 if MP_data == 'Surrogate':
     # A mass surrogate model only with 20MW results is built. Approximation of the 22MW machine.
     trainQLS()
-    depths = np.linspace(np.min(-Z),np.max(-Z),20)
+    depths = np.linspace(np.min(Z),np.max(Z),20)
     import scipy.special as sp
     def mean_wind_speed(A, k):
         return A * sp.gamma(1 + 1/k)
