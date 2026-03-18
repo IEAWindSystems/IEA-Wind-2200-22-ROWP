@@ -13,6 +13,7 @@ xarray = "*"
 netcdf4 = "*"
 scipy = "*"
 pyproj = "*"
+pytest = ">=9.0.2,<10"
 
 [pypi-dependencies]
 windIO = { path = "../windIO", editable = true }
