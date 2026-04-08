@@ -40,11 +40,12 @@ from datetime import datetime
 from pathlib import Path
 from functools import partial
 from multiprocessing import Pool
-from scipy.interpolate import RegularGridInterpolator
+from scipy.interpolate import RegularGridInterpolator, griddata
 from types import SimpleNamespace
 import os
 import copy
 import gc
+import re
 
 os.environ["OPENMDAO_WORKDIR"] = os.path.join(os.path.dirname(__file__), ".openmdao_out")
 #
@@ -147,16 +148,14 @@ cable_specs = [
 #%% Load data and setup pywake
 # system_dat = sys.argv[1]
 system_dat = windIO.load_yaml(Path(os.sep.join(['..', 'inputs', 'wind_energy_system.yaml'])))
-farm_dat = system_dat['wind_farm']
-resource_dat = system_dat['site']['energy_resource']
 
 # set up site
-A = resource_dat['wind_resource']['weibull_a']
-k = resource_dat['wind_resource']['weibull_k']
-freq = resource_dat['wind_resource']['sector_probability']
-wd_wb = resource_dat['wind_resource']['wind_direction']
-TI_org =  resource_dat['wind_resource']['turbulence_intensity']['data']
-ws_TI = resource_dat['wind_resource']['wind_speed']
+A = system_dat['site']['energy_resource']['wind_resource']['weibull_a']
+k = system_dat['site']['energy_resource']['wind_resource']['weibull_k']
+freq = system_dat['site']['energy_resource']['wind_resource']['sector_probability']
+wd_wb = system_dat['site']['energy_resource']['wind_resource']['wind_direction']
+TI_org =  system_dat['site']['energy_resource']['wind_resource']['turbulence_intensity']['data']
+ws_TI = system_dat['site']['energy_resource']['wind_resource']['wind_speed']
 site = XRSite(
        ds=xr.Dataset(data_vars=
                         {'Sector_frequency': ('wd', freq['data']), 
@@ -166,22 +165,22 @@ site = XRSite(
                          },
                       coords={'wd': wd_wb, 'ws': [0,ws_TI[0]-0.01] + ws_TI + [ws_TI[-1]+0.01,100]}))
 
-# define turbine
-hh = farm_dat['turbines']['hub_height']
-rd = farm_dat['turbines']['rotor_diameter']
-rp = farm_dat['turbines']['performance']['rated_power']
-cut_in = farm_dat['turbines']['performance']['cutin_wind_speed']
-cut_out = farm_dat['turbines']['performance']['cutout_wind_speed']
+# define turbine (note: all three sites feature same model)
+hh = system_dat['wind_farm'][0]['turbines']['hub_height']
+rd = system_dat['wind_farm'][0]['turbines']['rotor_diameter']
+rp = system_dat['wind_farm'][0]['turbines']['performance']['rated_power']
+cut_in = system_dat['wind_farm'][0]['turbines']['performance']['cutin_wind_speed']
+cut_out = system_dat['wind_farm'][0]['turbines']['performance']['cutout_wind_speed']
 # cp = farm_dat['turbines']['performance']['Cp_curve']['Cp_values']
 # cp_ws = farm_dat['turbines']['performance']['Cp_curve']['Cp_wind_speeds']
-p = farm_dat['turbines']['performance']['power_curve']['power_values']
-p_ws = farm_dat['turbines']['performance']['power_curve']['power_wind_speeds']
-ct = farm_dat['turbines']['performance']['Ct_curve']['Ct_values']
-ct_ws = farm_dat['turbines']['performance']['Ct_curve']['Ct_wind_speeds']
+p = system_dat['wind_farm'][0]['turbines']['performance']['power_curve']['power_values']
+p_ws = system_dat['wind_farm'][0]['turbines']['performance']['power_curve']['power_wind_speeds']
+ct = system_dat['wind_farm'][0]['turbines']['performance']['Ct_curve']['Ct_values']
+ct_ws = system_dat['wind_farm'][0]['turbines']['performance']['Ct_curve']['Ct_wind_speeds']
 # int_speeds = np.linspace(np.min(np.min([p_ws, ct_ws])), np.max(np.max([p_ws, ct_ws])), 10000)
 # ps_int = np.interp(int_speeds, p_ws, p)
 # cts_int = np.interp(int_speeds, ct_ws, ct)
-windTurbines = WindTurbine(name=farm_dat['turbines']['name'], diameter=rd, hub_height=hh, 
+windTurbines = WindTurbine(name=system_dat['wind_farm'][0]['turbines']['name'], diameter=rd, hub_height=hh, 
                       powerCtFunction=PowerCtTabular(p_ws, p, power_unit='W', ct=ct))
 
 # wake model
@@ -219,25 +218,49 @@ boundaries = {
 }
 
 # Substations
-Subs_x = {name: farm_dat['electrical_substations'][index]['electrical_substation']['coordinates']['x'][0] for name, index in wf.items()}
-Subs_y = {name: farm_dat['electrical_substations'][index]['electrical_substation']['coordinates']['y'][0] for name, index in wf.items()}
+Subs_x = {name: system_dat['wind_farm'][index]['electrical_substations'][0]['electrical_substation']['coordinates']['x'][0] for name, index in wf.items()}
+Subs_y = {name: system_dat['wind_farm'][index]['electrical_substations'][0]['electrical_substation']['coordinates']['y'][0] for name, index in wf.items()}
 
-#%% Setup monopile calculus and optimizer
-# Bathymetry
-X = np.array(system_dat['site']['bathymetry']['latitude'])
-Y = np.array(system_dat['site']['bathymetry']['longitude'])
-Z = np.array(system_dat['site']['bathymetry']['depth']['data'])
-# Transfer from LongLat to UTM (km)
-X_utm = utm.from_latlon(np.ones(len(Y))*X[0],Y)
-Y_utm = utm.from_latlon(X,np.ones(len(X))*Y[0])
-# Get UTM zone from a single point
-_, _, zone_number, zone_letter = utm.from_latlon(X[0], Y[0])
-# Build interpolator in (lat, lon)
-interpolator = RegularGridInterpolator((X, Y), Z, method="linear")
+#%% Process Bathymetry Data
+# Load 1D UTM data
+X_utm_1D = np.array(system_dat['site']['bathymetry']['x'])
+Y_utm_1D = np.array(system_dat['site']['bathymetry']['y'])
+Z_1D = -np.array(system_dat['site']['bathymetry']['depth']['data'])
+
+# Transfer from UTM to LonLat, to use original gridded data
+ds = xr.open_dataset("..\inputs\Bathymetry_UTM_1D.nc")  # load dataset
+crs = ds.x.long_name                                    # get coordinate reference system (crs)
+# Extract zone number and band letter
+match = re.search(r'UTM zone (\d+)([A-Z])', crs)
+if match:
+    zone_number = int(match.group(1))
+    zone_letter = match.group(2)
+# Convert to latlon
+X_latlon, Y_latlon = utm.to_latlon(X_utm_1D,Y_utm_1D,zone_number,zone_letter)
+x_latlon = np.unique(np.round(X_latlon,8)) # round due to small conversion errors
+y_latlon = np.unique(np.round(Y_latlon,8))
+# Reshape bathymetry to grid
+Z_grid = Z_1D.reshape(len(x_latlon),len(y_latlon))
+
+# Build interpolator in (lat, lon) using efficient grid-based interpolation
+interpolator = RegularGridInterpolator((x_latlon, y_latlon), Z_grid, method="linear")
 def depth_interp(easting, northing):
     lat, lon = utm.to_latlon(easting, northing, zone_number, zone_letter)
     return interpolator(np.column_stack((lat, lon)))
 
+# Interpolate grid for plots
+num_grid_x = 500  # number of points along x
+num_grid_y = 500  # number of points along y
+X_utm = np.linspace(X_utm_1D.min(), X_utm_1D.max(), num_grid_x)
+Y_utm = np.linspace(Y_utm_1D.min(), Y_utm_1D.max(), num_grid_y)
+Z = griddata(
+    points=(X_utm_1D, Y_utm_1D),          # scattered points
+    values=Z_1D,                       # Z values at scattered points
+    xi=(np.meshgrid(X_utm, Y_utm)),      # target grid
+    method='linear'                 # 'linear', 'nearest', or 'cubic'
+)
+
+#%% Setup monopile calculus
 # Calculate monopile mass for different water depth
 if MP_data == 'Surrogate':
     # A mass surrogate model only with 20MW results is built. Approximation of the 22MW machine.
@@ -269,6 +292,7 @@ coefficients = np.polyfit(depthmass[:, 1], depthmass[:, 0], 2)
 polynomial = np.poly1d(coefficients)
 polynomial_gradients = np.polyder(polynomial)
 
+#%% Optimization settings
 # SGD sampling
 sample = False
 samps = 100    #number of samples 
@@ -1004,14 +1028,14 @@ def evaluate_recorder():
         
         plt.gcf().subplots_adjust(
             top=0.999,
-            bottom=0.083,
+            bottom=0.085,
             left=0.0,
             right=0.925,
             hspace=0.2,
             wspace=0.2
         )
         fig = plt.gcf()
-        fig.set_size_inches(16 / 2.54, fig.get_size_inches()[1])
+        fig.set_size_inches(16 / 2.54, 4.5)
         
         plt.gcf().savefig("Figures//FinalLayout.pdf", dpi=500, pad_inches=0)
         
@@ -1125,7 +1149,7 @@ def evaluate_recorder():
 #%% Evaluate layout
 def evaluate_layout():
     # define
-    with open(r"Results\comp_s75_processed.pkl","rb") as file:
+    with open(r'Results/' + File + ".pkl","rb") as file:
         data = pickle.load(file)
     metrics_recorder=data['metrics_recorder']
     extra_vars['metrics_recorder'] = metrics_recorder
@@ -1144,7 +1168,7 @@ def evaluate_layout():
     
     # run
     extra_vars.update(xn=xn, yn=yn, nf=nf, curzone=curzone, nb=nb, nnb=nnb, Sx=Sx, Sy=Sy, sample=False, opt_nr=1, CableOpt="single_sub", CableSolver=CableSolver_opt, time_limit=tl_opt, mip_gap=mip_gap_opt)
-    res = lcoe_func(x_eva,y_eva,**extra_vars)
+    res = lcoe_func(np.array(x_eva),np.array(y_eva),**extra_vars)
     
     # plot
     plot_folder = "Figures//FinalResult"
@@ -1155,6 +1179,7 @@ def evaluate_layout():
     inputs['x'] = x_eva
     inputs['y'] = y_eva
     plot.compute(inputs,[])
+    return res
 #%% enforce constraints after optimization and conduct proper cable optimization
 def refine_opt_results(seed,*,Sequence,boundaries,File,metrics_recorder,Subs_x,Subs_y,X_utm,Y_utm,Z,cables_plot,obj,
                     plot_each,windTurbines,tur_nr,maxiter,sgd_thresh,min_spacing_m,**extra_vars):
@@ -1477,7 +1502,7 @@ if __name__ == "__main__":
     elif Mode == "correct_recorder":
         correct_recorder()
     elif Mode == "evaluate_layout":
-        evaluate_layout()
+        result = evaluate_layout()
     elif Mode == "refine_opt_results":
         if len(seeds) == 1:
             refine_opt_results(seeds[0],**extra_vars)

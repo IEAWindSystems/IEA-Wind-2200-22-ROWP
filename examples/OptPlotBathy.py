@@ -79,7 +79,7 @@ class XYPlotCompBathym(ExplicitComponent):
         self.ploteach = ploteach
         self.iter_nr = iter_nr
         self.paper = paper
-        self.FS = 8
+        self.FS = 9
     @property
     def ax(self):
         return self._ax or plt.gca()
@@ -112,11 +112,8 @@ class XYPlotCompBathym(ExplicitComponent):
     def init_plot(self, limits):
         self.ax.cla()
         fig = plt.gcf()
-        if self.optimize:
-            fig.set_size_inches(10, 5)
-            fig.tight_layout()
-        else:
-            fig.set_size_inches(6.97, 4.5)
+        fig.set_size_inches(4.72, 5)
+        fig.tight_layout()
 
         # self.ax.axis('equal')
 
@@ -129,7 +126,7 @@ class XYPlotCompBathym(ExplicitComponent):
         self.ax.set_ylim(ylim)
         
     def plot_bathymetry(self):
-        CS = self.ax.contourf(self.X[0], self.Y[1], self.Z, 100, cmap=plt.colormaps.get_cmap('Blues'))
+        CS = self.ax.contourf(self.X, self.Y, np.ma.masked_invalid(self.Z), 100, cmap=plt.colormaps.get_cmap('Blues'))
         CS.set_linewidth(0)  # Or use a list of widths if you need different values per level
         CS.set_edgecolor('face')  # Alternatively, you could use this to turn off edges
         if self.paper:
@@ -364,10 +361,19 @@ class XYPlotCompBathym(ExplicitComponent):
             
             if not self.optimize:
                 plt.gcf().subplots_adjust(
-                    top=0.879,
-                    bottom=0.088,
+                    top=0.864,
+                    bottom=0.083,
                     left=0.022,
                     right=0.978,
+                    hspace=0.2,
+                    wspace=0.2
+                )
+            else:
+                plt.gcf().subplots_adjust(
+                    top=0.952,
+                    bottom=0.093,
+                    left=0.119,
+                    right=0.974,
                     hspace=0.2,
                     wspace=0.2
                 )
