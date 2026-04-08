@@ -9,14 +9,14 @@ wind_deficit_model:
   use_effective_ws: False
   # use_effective_ti: False
 axial_induction_model: 1D
-deflection_model:
-  name: None
-turbulence_model:
-  name: None
+# deflection_model:
+#   name: None
+# turbulence_model:
+#   name: None
 superposition_model:
   ws_superposition: Squared
-rotor_averaging: {}
-blockage_model:
-  name: None
+# rotor_averaging: {}
+# blockage_model:
+#   name: None
 # groundModel:
 #   name: Mirror

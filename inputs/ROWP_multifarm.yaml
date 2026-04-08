@@ -19,12 +19,14 @@
                 5846298.892, 5848327.948, 5846176.221, 5851409.176, 5832913.673,
                 5843306.422, 5834698.599, 5842483.421
                 ]
+            crs: +proj=utm +zone=31 +datum=WGS84 +units=m +no_defs
   turbines: !include IEA37_22MW_turbine.yaml 
   electrical_substations:
       - electrical_substation:
             coordinates:
                 x: [554395.1]
                 y: [5836951.8]
+                crs: +proj=utm +zone=31 +datum=WGS84 +units=m +no_defs
   electrical_collection_array:
       edges:
         - [1,0,0]
@@ -64,7 +66,7 @@
         cable_type: [0, 1, 2]
         cross_section: [185, 400, 1000]     # mm^2
         capacity: [3, 5, 7]                 # turbines
-        cost: [368.9, 428.9, 737.1]         # USD/m
+        cost: [368.9, 428.9, 737.1]         # €/m
                       
 - name: IEA Wind 2200-22-MW Reference Offshore Wind Plant Mid
   layouts:
@@ -88,12 +90,14 @@
                 5836246.658, 5834923.391, 5832468.012, 5828626.617, 5830406.096,
                 5828406.585
                 ] 
+            crs: +proj=utm +zone=31 +datum=WGS84 +units=m +no_defs
   turbines: !include IEA37_22MW_turbine.yaml 
   electrical_substations:
       - electrical_substation:
             coordinates:
                 x: [549905.6]
                 y: [5829544.0]
+                crs: +proj=utm +zone=31 +datum=WGS84 +units=m +no_defs
   electrical_collection_array:
       edges:
         - [0,-1,2]
@@ -156,12 +160,14 @@
                 5821794.734, 5825904.382, 5821996.296, 5819948.920, 5815381.441,
                 5824786.491, 5821748.728, 5816905.260, 5814654.017, 5825476.314
                 ]
+            crs: +proj=utm +zone=31 +datum=WGS84 +units=m +no_defs
   turbines: !include IEA37_22MW_turbine.yaml 
   electrical_substations:
       - electrical_substation:
             coordinates:
                 x: [549000.0]
                 y: [5825600.0]
+                crs: +proj=utm +zone=31 +datum=WGS84 +units=m +no_defs
   electrical_collection_array:
       edges:
         - [6,-1,2]
