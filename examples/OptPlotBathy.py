@@ -112,7 +112,10 @@ class XYPlotCompBathym(ExplicitComponent):
     def init_plot(self, limits):
         self.ax.cla()
         fig = plt.gcf()
-        fig.set_size_inches(4.72, 5)
+        if (self.optimize or not self.paper):
+            fig.set_size_inches(4.72, 5.3) # additional legend entry (current zone)
+        else:
+            fig.set_size_inches(4.72, 5)
         fig.tight_layout()
 
         # self.ax.axis('equal')
@@ -126,7 +129,7 @@ class XYPlotCompBathym(ExplicitComponent):
         self.ax.set_ylim(ylim)
         
     def plot_bathymetry(self):
-        CS = self.ax.contourf(self.X, self.Y, np.ma.masked_invalid(self.Z), 100, cmap=plt.colormaps.get_cmap('Blues'))
+        CS = self.ax.contourf(self.X, self.Y, np.ma.masked_invalid(self.Z), 100, cmap=plt.colormaps.get_cmap('Blues'),zorder=0)
         CS.set_linewidth(0)  # Or use a list of widths if you need different values per level
         CS.set_edgecolor('face')  # Alternatively, you could use this to turn off edges
         if self.paper:
@@ -178,7 +181,7 @@ class XYPlotCompBathym(ExplicitComponent):
 
     def plot_current_position(self, x, y):
         # if self.paper:
-        self.ax.scatter(x, y, facecolors='darkorange', edgecolors='black', marker='^', s=25, zorder=3, linewidth=0.5, label='Turbine')
+        self.ax.scatter(x, y, facecolors='darkorange', edgecolors='black', marker='^', s=25, zorder=5, linewidth=0.5, label='Turbine')
         # else:
             # for c, x_, y_ in zip(self.colors, x, y):
             #     self.ax.plot(x_, y_, 'o', color=c, ms=5)
@@ -191,7 +194,8 @@ class XYPlotCompBathym(ExplicitComponent):
                             facecolor=(255/255, 140/255, 0/255, 0.3), # darkorange with alpha = 0.3
                             edgecolor='darkorange',
                             linewidth=0.7,
-                            label='Spacing constraint' if i == 0 else None)
+                            label='Spacing constraint' if i == 0 else None,
+                            zorder=4)
             self.ax.add_patch(circle)
             
     def plot_nb_spacing(self, x, y):
@@ -199,12 +203,13 @@ class XYPlotCompBathym(ExplicitComponent):
             circle = Circle((x, y), self.metrics_recorder['general_settings'][0]['d_RD']*283.2181/2,
                             facecolor=(255/255, 140/255, 0/255, 0.3), # darkorange with alpha = 0.3
                             edgecolor='darkorange',
-                            linewidth=0.7)
+                            linewidth=0.7,
+                            zorder=4)
             self.ax.add_patch(circle)
         
     def plot_nb_position(self, x, y):
         # if self.paper:
-        self.ax.scatter(x, y, facecolors='darkorange', edgecolors='black', marker='^', s=25, zorder=3, linewidth=0.5)
+        self.ax.scatter(x, y, facecolors='darkorange', edgecolors='black', marker='^', s=25, zorder=5, linewidth=0.5)
         # else:
         #     for c, x_, y_ in zip(self.colors, x, y):
         #         self.ax.plot(x_, y_, 'o', color=c, ms=5)
@@ -225,13 +230,13 @@ class XYPlotCompBathym(ExplicitComponent):
             by = b[i][:,1]
             bx = np.append(bx,bx[0])
             by = np.append(by,by[0])
-            if self.optimize and i == i_opt:
-                polygon = Polygon(np.c_[bx, by], closed=True, facecolor='blueviolet', edgecolor='none', alpha=0.17)
-                self.ax.add_patch(polygon)
             if i == 0:
-                self.ax.plot(bx,by,color='k',linewidth=0.5,label='Boundary')
+                self.ax.plot(bx,by,color='k',linewidth=0.5,label='Boundary',zorder=2)
+            if (self.optimize or not self.paper) and i == i_opt:
+                polygon = Polygon(np.c_[bx, by], closed=True, facecolor='blueviolet', edgecolor='none', alpha=0.17, label='Current zone',zorder=1)
+                self.ax.add_patch(polygon)
             else:
-                self.ax.plot(bx,by,color='k',linewidth=0.5)
+                self.ax.plot(bx,by,color='k',linewidth=0.5,zorder=2)
         
     def plot_cables(self,x,y):
         # CabName = ['Cable A=' + str(round(self.cables[0][0])) + 'mm²','Cable A=' + str(round(self.cables[1][0])) + 'mm²','Cable A=' + str(round(self.cables[2][0])) + 'mm²']
@@ -253,11 +258,11 @@ class XYPlotCompBathym(ExplicitComponent):
                 # c) go through all turbines and plot connection
                 for i in range(len(con)):
                     if cabplot[con[i][2]] == 0 and con[i][2] == plot2:
-                        self.ax.plot([AllX[con[i][0]],AllX[con[i][1]]],[AllY[con[i][0]],AllY[con[i][1]]],color='firebrick',linewidth=lw[con[i][2]],label=CabName[con[i][2]])
+                        self.ax.plot([AllX[con[i][0]],AllX[con[i][1]]],[AllY[con[i][0]],AllY[con[i][1]]],color='firebrick',linewidth=lw[con[i][2]],label=CabName[con[i][2]],zorder=4)
                         cabplot[con[i][2]] = 1
                         plot2 = plot2 + 1
                     else:
-                        self.ax.plot([AllX[con[i][0]],AllX[con[i][1]]],[AllY[con[i][0]],AllY[con[i][1]]],color='firebrick',linewidth=lw[con[i][2]])
+                        self.ax.plot([AllX[con[i][0]],AllX[con[i][1]]],[AllY[con[i][0]],AllY[con[i][1]]],color='firebrick',linewidth=lw[con[i][2]],zorder=4)
         
     def plot_substations(self):
         self.ax.scatter(list(self.Sx.values()),list(self.Sy.values()),marker='s',s=7,color='k', zorder=3,label='Substation')
@@ -271,7 +276,7 @@ class XYPlotCompBathym(ExplicitComponent):
         # Plot lcoe if no sampling
         if not self.sampling and self.obj:
             if self.obj == 'lcoe':
-                unit = '$/MWh'
+                unit = '€/MWh'
                 divider = 1
                 obj = 'LCOE'
             else:
@@ -326,10 +331,10 @@ class XYPlotCompBathym(ExplicitComponent):
             x = inputs['x']
             y = inputs['y']
                 
-            if self.optimize:
-                self.plot_constraints()
-            else:
-                self.plot_tur_spacing(x, y)
+            # if self.optimize:
+            #     self.plot_constraints()
+            # else:
+            self.plot_tur_spacing(x, y)
 
             self.plot_cables(x,y)
             self.plot_substations()
