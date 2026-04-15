@@ -91,7 +91,7 @@
                 5828406.585
                 ] 
             crs: +proj=utm +zone=31 +datum=WGS84 +units=m +no_defs
-  turbines: !include IEA37_22MW_turbine.yaml 
+  turbines: !include turbines.yaml 
   electrical_substations:
       - electrical_substation:
             coordinates:
@@ -161,7 +161,7 @@
                 5824786.491, 5821748.728, 5816905.260, 5814654.017, 5825476.314
                 ]
             crs: +proj=utm +zone=31 +datum=WGS84 +units=m +no_defs
-  turbines: !include IEA37_22MW_turbine.yaml 
+  turbines: !include turbines.yaml 
   electrical_substations:
       - electrical_substation:
             coordinates:
