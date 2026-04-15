@@ -17,5 +17,5 @@ boundaries:
             crs: +proj=utm +zone=31 +datum=WGS84 +units=m +no_defs
         }
     ]
-energy_resource: !include wind_resource.yaml
-bathymetry: !include Bathymetry_UTM_1D.nc # Bathymetry_EMODnet_lonlat_utm
+energy_resource: !include energy_resource.yaml
+bathymetry: !include bathymetry.nc # Bathymetry_EMODnet_lonlat_utm
