@@ -18,13 +18,10 @@
 # 6. Rafael Valotta Rodrigues (University of Massachusetts Boston)
 # 7. Pierre-Elouan Réthoré (DTU)
 # 8. Abhinav Kapila (RWE)
-# 9. Bruno Nguyen (RWE)
-# 10. Pietro Bortolotti (NREL)
-# 11. P.J. Stanley (Shell)
-# 12. Sebastian Sanchez Perez Moreno (Shell)
+# 9. Pietro Bortolotti (NREL)
 #
 # Project lead and advisor:
-# 13. Christopher J. Bay (NREL)
+# 10. Christopher J. Bay (NREL)
 #
 #%% Preamble
 # ---
@@ -80,7 +77,7 @@ from subscripts.TopfarmAdvancedConstraints import DistanceConstraintAggregation 
 #
 #%% INPUTS
 # Parallelization
-# seeds = [3]
+# seeds = [83]
 seeds = np.arange(1,250)        # random np seed for initial layout configuration. If more than 1, parallel execution.
 num_workers = 48                # number of workers for parallel execution if len(seeds)>1 
 
@@ -97,7 +94,7 @@ num_workers = 48                # number of workers for parallel execution if le
 #
 Mode = 'competitive'                            # 'cooperative' or 'competitive' or 'evaluate_recorder' or 'evaluate_multiter' or 'evaluate_layout' or 'evaluate_seeds' or 'refine_opt_results'
 Continue = False                                # set to True if you give foregoing metrics_recorder to continue optimization
-File = 'comp_TI'                                   # define name of files that is stored or loaded. the seed will be added as e.g. "_s3"
+File = 'comp'                                   # define name of files that is stored or loaded. the seed will be added as e.g. "_s3"
 Sequence = ['north','mid','south']*5            # define sequence of zones for sequential design
 CableSolver_opt = 'MetaHeuristic'               # Cable solver using during nested optimization: 'Heuristic', 'MetaHeuristic', 'cplex', 'ortools' or 'gurobi'
 CableSolver_final = 'ortools'                   # Cable solver used for final cabling plan optimization.
