@@ -71,12 +71,12 @@ from topfarm.constraint_components.constraint_aggregation import DistanceConstra
 import windIO
 from optiwindnet.api import WindFarmNetwork, MILPRouter, HGSRouter, EWRouter
 from optiwindnet.augmentation import poisson_disc_filler
-from ssms.CalculateMass import CalculateMass
-from ssms.curve_fit_monopile import trainQLS
-from OptPlotBathy import XYPlotCompBathym
-from RecordFunc import create_recorder, record_cable_metrics, record_main_metrics_multisub, record_main_metrics_singlesub, record_results_constraints
-from TopfarmAdvancedConstraints import CorrectedXYBoundaryConstraint, SpacingConstraintWithAdditionalTurbines
-from TopfarmAdvancedConstraints import DistanceConstraintAggregation as DistanceConstraintAggregationAdvanced
+from subscripts.ssms.CalculateMass import CalculateMass
+from subscripts.ssms.curve_fit_monopile import trainQLS
+from subscripts.OptPlotBathy import XYPlotCompBathym
+from subscripts.RecordFunc import create_recorder, record_cable_metrics, record_main_metrics_multisub, record_main_metrics_singlesub, record_results_constraints
+from subscripts.TopfarmAdvancedConstraints import CorrectedXYBoundaryConstraint, SpacingConstraintWithAdditionalTurbines
+from subscripts.TopfarmAdvancedConstraints import DistanceConstraintAggregation as DistanceConstraintAggregationAdvanced
 #
 #%% INPUTS
 # Parallelization
@@ -147,7 +147,7 @@ cable_specs = [
 
 #%% Load data and setup pywake
 # system_dat = sys.argv[1]
-system_dat = windIO.load_yaml(Path(os.sep.join(['..', 'inputs', 'wind_energy_system.yaml'])))
+system_dat = windIO.load_yaml(Path(os.sep.join(['..', 'data', 'wind_energy_system.yaml'])))
 
 # set up site
 A = system_dat['site']['energy_resource']['wind_resource']['weibull_a']
@@ -228,7 +228,7 @@ Y_utm_1D = np.array(system_dat['site']['bathymetry']['y'])
 Z_1D = -np.array(system_dat['site']['bathymetry']['depth']['data'])
 
 # Transfer from UTM to LonLat, to use original gridded data
-ds = xr.open_dataset("..\inputs\Bathymetry_UTM_1D.nc")  # load dataset
+ds = xr.open_dataset("..\data\bathymetry.nc")  # load dataset
 crs = ds.x.long_name                                    # get coordinate reference system (crs)
 # Extract zone number and band letter
 match = re.search(r'UTM zone (\d+)([A-Z])', crs)
@@ -324,7 +324,7 @@ if Mode == 'cooperative':
     
 # update font to latex
 import matplotlib.font_manager as font_manager
-font_dir = [r"font\Serif"]
+font_dir = [r"subscripts\font\Serif"]
 for font in font_manager.findSystemFonts(font_dir):
     font_manager.fontManager.addfont(font)
 plt.rcParams["font.family"] = "CMU Serif"

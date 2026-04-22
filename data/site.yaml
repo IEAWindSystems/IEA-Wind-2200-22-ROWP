@@ -18,4 +18,4 @@ boundaries:
         }
     ]
 energy_resource: !include energy_resource.yaml
-bathymetry: !include bathymetry.nc # Bathymetry_EMODnet_lonlat_utm
+bathymetry: !include bathymetry.nc

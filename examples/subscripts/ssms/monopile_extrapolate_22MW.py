@@ -129,6 +129,7 @@ def trainQLS(rp):
 from CalculateMass import CalculateMass
 # varying quantities
 depths = np.arange(19,37.1,0.5)
+depths = np.arange(10,60.1,1)
 rps = np.arange(16,21)
 
 # fixed parameter
@@ -144,15 +145,17 @@ tot_masses = {}
 records = []
 for rp in rps:
     trainQLS(rp)
-    masses = []
+    masses = [] # monopile
+    tower_masses = []
     for z in depths:
        cur_mass = CalculateMass(D=rd, HTrans=PlatformHeight, HHub=hh, WaterDepth=z, WaveHeight=WaveHeight, WavePeriod=WavePeriod, WindSpeed=V_ave, IP_item=1)
        masses.append(cur_mass[0][0])
-       records.append([rp, z, cur_mass[0][0]])  # Append [Power, Depth, Mass]
+       tower_masses.append(cur_mass[1][0])
+       records.append([rp, z, cur_mass[0][0], cur_mass[1][0]])  # Append [Power, Depth, Mass_monopile, Mass_tower]
     tot_masses[rp] = masses
 
 # Create pandas DataFrame
-df = pd.DataFrame(records, columns=["Power_MW", "Depth_m", "Mass_kg"])
+df = pd.DataFrame(records, columns=["Power_MW", "Depth_m", "Mass_mp_kg", "Mass_tower_kg"])
 df.sort_values(by=["Depth_m", "Power_MW"], inplace=True)
 df.reset_index(drop=True, inplace=True)
 
@@ -169,26 +172,36 @@ poly = PolynomialFeatures(degree=2)
 # Group by depth to fit separate regressions
 for depth, group in df.groupby("Depth_m"):
     X = group["Power_MW"].values.reshape(-1, 1)
-    y = group["Mass_kg"].values
-
+    y1 = group["Mass_mp_kg"].values
+    y2 = group["Mass_tower_kg"].values
+    
+    # monopile
     X_poly = poly.fit_transform(X)
     model = LinearRegression()
-    model.fit(X, y)
-    M_22 = model.predict([[target_power]])[0]
-    y_pred = model.predict(X)
+    model.fit(X, y1)
+    M_22_mp = model.predict([[target_power]])[0]
+    y1_pred = model.predict(X)
+    
+    # tower
+    X_poly = poly.fit_transform(X)
+    model = LinearRegression()
+    model.fit(X, y2)
+    M_22_tower = model.predict([[target_power]])[0]
+    y2_pred = model.predict(X)
     
     # model.fit(X_poly, y)
     # M_22 = model.predict(poly.transform([[target_power]]))[0]
     # y_pred = model.predict(X_poly)
     
     # Calculate R² for this fit
-    r2 = r2_score(y, y_pred)
+    r2_mp = r2_score(y1, y1_pred)
+    r2_tower = r2_score(y2, y2_pred)
     
-    predictions.append([target_power, depth, M_22, r2])
+    predictions.append([target_power, depth, M_22_mp, r2_mp, M_22_tower, r2_tower])
 
 # Create a DataFrame for the 22MW results and store
-df_22 = pd.DataFrame(predictions, columns=["Power_MW", "Depth_m", "Mass_kg", "R2"])
-df_22.to_csv("Mass_Monopile_22MW_extrapolated.csv", index=False)
+df_22 = pd.DataFrame(predictions, columns=["Power_MW", "Depth_m", "Mass_mp_kg", "R2", "Mass_tower_kg", "R2"])
+df_22.to_csv("Mass_Monopile_22MW_extrapolated_detect.csv", index=False)
 #
 #%% Plot
 if True:

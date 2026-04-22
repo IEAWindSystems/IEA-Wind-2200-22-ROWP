@@ -181,7 +181,7 @@ class XYPlotCompBathym(ExplicitComponent):
 
     def plot_current_position(self, x, y):
         # if self.paper:
-        self.ax.scatter(x, y, facecolors='darkorange', edgecolors='black', marker='^', s=25, zorder=5, linewidth=0.5, label='Turbine')
+        self.ax.scatter(x, y, facecolors='darkorange', edgecolors='black', marker='^', s=25, zorder=6, linewidth=0.5, label='Turbine')
         # else:
             # for c, x_, y_ in zip(self.colors, x, y):
             #     self.ax.plot(x_, y_, 'o', color=c, ms=5)
@@ -209,7 +209,7 @@ class XYPlotCompBathym(ExplicitComponent):
         
     def plot_nb_position(self, x, y):
         # if self.paper:
-        self.ax.scatter(x, y, facecolors='darkorange', edgecolors='black', marker='^', s=25, zorder=5, linewidth=0.5)
+        self.ax.scatter(x, y, facecolors='darkorange', edgecolors='black', marker='^', s=25, zorder=6, linewidth=0.5)
         # else:
         #     for c, x_, y_ in zip(self.colors, x, y):
         #         self.ax.plot(x_, y_, 'o', color=c, ms=5)
@@ -231,12 +231,13 @@ class XYPlotCompBathym(ExplicitComponent):
             bx = np.append(bx,bx[0])
             by = np.append(by,by[0])
             if i == 0:
-                self.ax.plot(bx,by,color='k',linewidth=0.5,label='Boundary',zorder=2)
+                self.ax.plot(bx,by,color='k',linewidth=0.5,label='Boundary',zorder=2,linestyle=':')
+            else:
+                self.ax.plot(bx,by,color='k',linewidth=0.5,zorder=2,linestyle=':')
+                
             if (self.optimize or not self.paper) and i == i_opt:
                 polygon = Polygon(np.c_[bx, by], closed=True, facecolor='blueviolet', edgecolor='none', alpha=0.17, label='Current zone',zorder=1)
                 self.ax.add_patch(polygon)
-            else:
-                self.ax.plot(bx,by,color='k',linewidth=0.5,zorder=2)
         
     def plot_cables(self,x,y):
         # CabName = ['Cable A=' + str(round(self.cables[0][0])) + 'mm²','Cable A=' + str(round(self.cables[1][0])) + 'mm²','Cable A=' + str(round(self.cables[2][0])) + 'mm²']
@@ -258,14 +259,14 @@ class XYPlotCompBathym(ExplicitComponent):
                 # c) go through all turbines and plot connection
                 for i in range(len(con)):
                     if cabplot[con[i][2]] == 0 and con[i][2] == plot2:
-                        self.ax.plot([AllX[con[i][0]],AllX[con[i][1]]],[AllY[con[i][0]],AllY[con[i][1]]],color='firebrick',linewidth=lw[con[i][2]],label=CabName[con[i][2]],zorder=4)
+                        self.ax.plot([AllX[con[i][0]],AllX[con[i][1]]],[AllY[con[i][0]],AllY[con[i][1]]],color='firebrick',linewidth=lw[con[i][2]],label=CabName[con[i][2]],zorder=5)
                         cabplot[con[i][2]] = 1
                         plot2 = plot2 + 1
                     else:
-                        self.ax.plot([AllX[con[i][0]],AllX[con[i][1]]],[AllY[con[i][0]],AllY[con[i][1]]],color='firebrick',linewidth=lw[con[i][2]],zorder=4)
+                        self.ax.plot([AllX[con[i][0]],AllX[con[i][1]]],[AllY[con[i][0]],AllY[con[i][1]]],color='firebrick',linewidth=lw[con[i][2]],zorder=5)
         
     def plot_substations(self):
-        self.ax.scatter(list(self.Sx.values()),list(self.Sy.values()),marker='s',s=7,color='k', zorder=3,label='Substation')
+        self.ax.scatter(list(self.Sx.values()),list(self.Sy.values()),marker='s',s=7,color='k', zorder=6,label='Substation')
     
     def set_title(self):
         # Overall optimization
