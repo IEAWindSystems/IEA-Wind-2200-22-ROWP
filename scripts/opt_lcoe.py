@@ -77,7 +77,7 @@ from subscripts.TopfarmAdvancedConstraints import DistanceConstraintAggregation 
 #
 #%% INPUTS
 # Parallelization
-# seeds = [83]
+# seeds = [86]
 seeds = np.arange(1,250)        # random np seed for initial layout configuration. If more than 1, parallel execution.
 num_workers = 48                # number of workers for parallel execution if len(seeds)>1 
 
@@ -119,7 +119,7 @@ sgd_thresh = 0.02                       # SGD threshold
 
 # Monopile optimization
 MP_data = 'LUT'                         # 'LUT' for mass-vs-depth look-up tables, 'Surrogate' for mass surrogate model
-MP_LUT_file = 'ssms//Mass_Monopile_22MW_extrapolated.csv'   # file name of the LUT if option chosen
+MP_LUT_file = 'subscripts//ssms//Mass_Monopile_22MW_extrapolated.csv'   # file name of the LUT if option chosen
 MP_ref = 1                              # reference turbine type for monopile mass scaling if surrogate chosen. 0 = 10MW, 1 = 15MW, 2 = 3.4MW
 
 # lcoe parameters
@@ -225,7 +225,7 @@ Y_utm_1D = np.array(system_dat['site']['bathymetry']['y'])
 Z_1D = -np.array(system_dat['site']['bathymetry']['depth']['data'])
 
 # Transfer from UTM to LonLat, to use original gridded data
-ds = xr.open_dataset("..\data\bathymetry.nc")  # load dataset
+ds = xr.open_dataset(r"..\data\bathymetry.nc")  # load dataset
 crs = ds.x.long_name                                    # get coordinate reference system (crs)
 # Extract zone number and band letter
 match = re.search(r'UTM zone (\d+)([A-Z])', crs)
@@ -1332,12 +1332,12 @@ def evaluate_seeds():
         try:
             try:
                 # load the finetuned recorder (with enforced constraints) if it exists
-                with open(f"Results/comp_s{s}_processed_refined.pkl", "rb") as file:
+                with open("Results/" + File + f"_s{s}_processed_refined.pkl", "rb") as file:
                     data = pickle.load(file)
             except:
                 # otherwise, load the original file
                 # (constraints have not been violated for the final design or not yet been finetuned)
-                with open(f"Results/comp_s{s}_processed.pkl", "rb") as file:
+                with open("Results/" + File + f"_s{s}_processed.pkl", "rb") as file:
                     data = pickle.load(file)
             mr = data["metrics_recorder"]
             # store main metrics
