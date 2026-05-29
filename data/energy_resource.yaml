@@ -55,9 +55,9 @@ wind_resource:
     - 0.107
     dims:
     - wind_speed
-  shear:
-    alpha: 0.0
-    h_ref: 170
+  # shear:
+  #   alpha: 0.0
+  #   h_ref: 170
   weibull_a:
     data:
     - 9.26634
