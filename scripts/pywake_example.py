@@ -21,7 +21,7 @@ from py_wake.rotor_avg_models import RotorCenter
 from py_wake.turbulence_models import CrespoHernandez
 
 #%% Inputs
-Model = 'jensen'        # Wake model, pick from: 'jensen', 'gauss2014', 'gauss2016', 'turbopark'
+Model = 'turbopark'        # Wake model, pick from: 'jensen', 'gauss2014', 'gauss2016', 'turbopark'
 Farm = 'north'          # Farm to evaluate, pick from: 'all', 'north', 'mid', 'south'. Note: neighbors not considered for individual plants!
 wd_step = 1             # wind direction discretization in [deg]
 ws_step = 1             # wind speed discretization in [m/s]
