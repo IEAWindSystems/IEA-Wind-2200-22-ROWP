@@ -3,9 +3,9 @@
 The `scripts/` directory contains five Python routines supporting the use, validation, and reproducibility of the IEA Wind 2200-22-MW Reference Offshore Wind Plants.
 
 - **Optimization:** The optimization routine used to generate the reference plant layouts. The numerical assumptions used in the optimization are provided to support reproducibility and transparency.
-- **PyWake example:** A simple application example showing how to load the reference plant data and run a wake simulation using [PyWake](https://github.com/DTUWindEnergy/PyWake).
-- **FLORIS example:** An application example demonstrating how to use the reference plant data with [FLORIS](https://github.com/NREL/floris).
-- **WIFA example:** An example demonstrating the machine-actionable use of the dataset by running a wind-farm flow simulation with PyWake through the [WIFA](https://github.com/IEAWindSystems/WIFA) pipeline.
+- **PyWake example:** A simple application example showing how to load the reference plant data and run a wake simulation using [PyWake](https://gitlab.windenergy.dtu.dk/TOPFARM/PyWake).
+- **FLORIS example:** An application example demonstrating how to use the reference plant data with [FLORIS](https://github.com/NatLabRockies/floris).
+- **WIFA example:** An example demonstrating the machine-actionable use of the dataset by running a wind-farm flow simulation with PyWake through the [WIFA](https://github.com/EUFLOW/WIFA) pipeline.
 - **Validation:** The `validate.py` script validates that the data are correctly encoded according to the [windIO ontology](https://github.com/IEAWindSystems/windIO). This helps ensure consistency, interoperability, and correctness of the dataset.
 
 The scripts are provided as examples and can be adapted to specific workflows and simulation tools.
