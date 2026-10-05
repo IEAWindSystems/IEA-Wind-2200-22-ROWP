@@ -24,6 +24,6 @@ The `Results/` directory contains the optimization results and associated post-p
 
 The following animation provides a preview of the layout optimization process:
 
-![Optimization process](Results/Optimization.gif)
+<img src="Results/Optimization.gif" alt="Optimization process" width="50%">
 
 [Watch the full-resolution optimization video](Results/optimization.mp4)
