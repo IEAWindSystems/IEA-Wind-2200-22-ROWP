@@ -7,7 +7,7 @@ This repository contains the data and computational tools defining the **IEA Win
 The reference plants comprise **three closely spaced wind plants with a total of 100 IEA Wind 22-MW turbines**, exhibiting strong internal and external wake interactions. These conditions reflect modern offshore wind developments, such as those in the North Sea. A **neighbor-aware, cost-based objective function** is used to determine the plant layouts.
 
 <div align="center">
-  <img src="scripts/Results/FinalLayout.svg" alt="IEA Wind 2200-22-MW Reference Offshore Wind Plants" width="66%">
+  <img src="scripts/Results/FinalLayout.svg" alt="IEA Wind 2200-22-MW Reference Offshore Wind Plants" width="80%">
 
   <p><em>The three IEA Wind 2200-22-MW Reference Offshore Wind Plants.</em></p>
 </div>
