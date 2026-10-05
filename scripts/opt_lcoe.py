@@ -34,7 +34,6 @@ import xarray as xr
 import utm
 import pickle
 from datetime import datetime
-from pathlib import Path
 from functools import partial
 from multiprocessing import Pool
 from scipy.interpolate import RegularGridInterpolator, griddata
@@ -144,7 +143,7 @@ cable_specs = [
 
 #%% Load data and setup pywake
 # system_dat = sys.argv[1]
-system_dat = windIO.load_yaml(Path(os.sep.join(['..', 'data', 'wind_energy_system.yaml'])))
+system_dat = windIO.load_yaml(r'..\data\wind_energy_system.yaml')
 
 # set up site
 A = system_dat['site']['energy_resource']['wind_resource']['weibull_a']

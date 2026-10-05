@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Description: Simple exemplary script to load windIO data and run pywake wind farm flow analysis
+Description: Simple exemplary script to load windIO data and run pywake wind farm flow analysis. Created with py_wake v2.6.12.
 Author: Samuel Kainz
 Date: 22/04/2026
 """
@@ -8,8 +8,6 @@ Date: 22/04/2026
 #%% Preamble
 import numpy as np
 import windIO
-from pathlib import Path
-import os
 import xarray as xr
 
 from py_wake.site import XRSite
@@ -27,7 +25,7 @@ wd_step = 1             # wind direction discretization in [deg]
 ws_step = 1             # wind speed discretization in [m/s]
 
 #%% Load windio data
-system_dat = windIO.load_yaml(Path(os.sep.join(['..', 'data', 'wind_energy_system.yaml'])))
+system_dat = windIO.load_yaml(r'..\data\wind_energy_system.yaml')
 
 # site data
 A = system_dat['site']['energy_resource']['wind_resource']['weibull_a']

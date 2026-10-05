@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Description: Simple exemplary script to load windIO data and run Floris wind farm flow analysis
+Description: Simple exemplary script to load windIO data and run Floris wind farm flow analysis. Created using Floris v4.6.4
 Author: Samuel Kainz
 Date: 23/04/2026
 """
@@ -8,8 +8,6 @@ Date: 23/04/2026
 #%% Preamble
 import numpy as np
 import windIO
-from pathlib import Path
-import os
 from floris import FlorisModel, WindRose
 from floris.turbine_library import build_cosine_loss_turbine_dict
 
@@ -20,7 +18,7 @@ wd_step = 1             # wind direction discretization in [deg]
 ws_step = 1             # wind speed discretization in [m/s]
 
 #%% Load windio data
-system_dat = windIO.load_yaml(Path(os.sep.join(['..', 'data', 'wind_energy_system.yaml'])))
+system_dat = windIO.load_yaml(r'..\data\wind_energy_system.yaml')
 
 # site data
 A = system_dat['site']['energy_resource']['wind_resource']['weibull_a']['data']
@@ -127,6 +125,7 @@ fmodel.set(
 
 #%% Run
 fmodel.run()
+
 aep = fmodel.get_farm_AEP()/1e9
 fmodel.run_no_wake()
 aep_nowake = fmodel.get_farm_AEP()/1e9
