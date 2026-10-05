@@ -52,6 +52,10 @@ If you use the IEA Wind 2200-22-MW Reference Offshore Wind Plants in a publicati
 
 - [IEA Wind 22-MW Reference Wind Turbine](https://github.com/IEAWindSystems/IEA-22-280-RWT)
 - [windIO](https://github.com/IEAWindSystems/windIO)
+- [PyWake](https://gitlab.windenergy.dtu.dk/TOPFARM/PyWake)
+- [FLORIS](https://github.com/NatLabRockies/floris)
+- [WIFA](https://github.com/EUFLOW/WIFA)
+- [TopFarm](https://gitlab.windenergy.dtu.dk/TOPFARM/TopFarm2)
 
 ## License
 
