@@ -76,8 +76,8 @@ from subscripts.TopfarmAdvancedConstraints import DistanceConstraintAggregation 
 #
 #%% INPUTS
 # Parallelization
-# seeds = [86]
-seeds = np.arange(1,250)        # random np seed for initial layout configuration. If more than 1, parallel execution.
+seeds = [86]                    # random np seed for initial layout configuration. If more than 1, parallel execution.
+# seeds = np.arange(1,250)      #       - " -
 num_workers = 48                # number of workers for parallel execution if len(seeds)>1 
 
 # General inputs
@@ -91,9 +91,9 @@ num_workers = 48                # number of workers for parallel execution if le
 # 'evaluate_seeds'      ...evaluate the recorders of multiple seeds to identify which seed performed the best and plot the distributions
 # 'refine_opt_results'  ...reoptimize unfeasible layouts (=constraint violations) by only enforcing the constraints and ignoring the objective
 #
-Mode = 'competitive'                            # 'cooperative' or 'competitive' or 'evaluate_recorder' or 'evaluate_multiter' or 'evaluate_layout' or 'evaluate_seeds' or 'refine_opt_results'
+Mode = 'evaluate_recorder'                      # 'cooperative' or 'competitive' or 'evaluate_recorder' or 'evaluate_multiter' or 'evaluate_layout' or 'evaluate_seeds' or 'refine_opt_results'
 Continue = False                                # set to True if you give foregoing metrics_recorder to continue optimization
-File = 'comp'                                   # define name of files that is stored or loaded. the seed will be added as e.g. "_s3"
+File = 'Recorder_processed'                     # define name of files that is stored or loaded. For storing, the seed will be added as e.g. "_s3"
 Sequence = ['north','mid','south']*5            # define sequence of zones for sequential design
 CableSolver_opt = 'MetaHeuristic'               # Cable solver using during nested optimization: 'Heuristic', 'MetaHeuristic', 'cplex', 'ortools' or 'gurobi'
 CableSolver_final = 'ortools'                   # Cable solver used for final cabling plan optimization.
@@ -102,9 +102,9 @@ tur_nr = {"north": 33, "mid": 33, "south": 34}  # turbine number assigned to eac
 obj = 'lcoe'                                    # 'lcoe' or 'aep'
 plot_iter = True                                # True or False: plot and store layouts during optimization each plot_each iterations
 plot_postpro = True                             # True or False: plot and store layouts during postprocessing (how often is linked to step)
-plot_each = 500                                  # define in which interval a plot should be made
+plot_each = 500                                 # define in which interval a plot should be made
 d_RD = 6                                        # min spacing distance in rotor diameters
-step = 500                                      # at each "step" iterations, the full wind rose is recalculated in postprocessing (when sampling is used during opt)
+step = 50                                       # at each "step" iterations, the full wind rose is recalculated in postprocessing (when sampling is used during opt)
 
 # plot lims
 xlim = None                             # specify xlim for convergence plot or put None
@@ -527,14 +527,14 @@ def plot_convergence(mr=None,item=None,plotstr=None,obj=1,overall=0,optfat=0,fea
     for zone in zones:
         ax.plot(np.array(mr['iteration']),[x if x!=0 else np.nan for x in mr[item+'_'+str(zone)]], label=str(zone), linewidth = LW, zorder=2)
     if obj:
-        ax.plot(np.array(mr['iteration']),[x if x!=0 else np.nan for x in mr[item]], label='Overall', linewidth = LW)
+        ax.plot(np.array(mr['iteration']),[x if x!=0 else np.nan for x in mr[item]], label='overall', linewidth = LW)
     if overall:
-        ax.plot(np.array(mr['iteration']),[x if x!=0 else np.nan for x in mr[item+'_all']], label='Overall', linewidth = LW, zorder=1)
+        ax.plot(np.array(mr['iteration']),[x if x!=0 else np.nan for x in mr[item+'_all']], label='overall', linewidth = LW, zorder=1)
     if optfat:
         for i in range(0,len(mr['lcoe_all'])-1):
             if mr['opt_nr'][i] == mr['opt_nr'][i+1]:
                 ax.plot(np.array(mr['iteration'][i:i+2]),
-                    np.array(mr[item+'_'+mr['cur_zone'][i][0]][i:i+2]), linestyle=":", linewidth = LW-0.2, color="black", label='Current objective' if i == 0 else "")
+                    np.array(mr[item+'_'+mr['cur_zone'][i][0]][i:i+2]), linestyle=":", linewidth = LW-0.2, color="black", label='Current obj.' if i == 0 else "")
     if reg:
         vertical_lines = [mr['iteration'][i] for i in range(1, len(mr['opt_nr'])) if mr['opt_nr'][i] > mr['opt_nr'][i-1]]  # Find indices where opt_nr increases
         for x in vertical_lines:
@@ -542,11 +542,11 @@ def plot_convergence(mr=None,item=None,plotstr=None,obj=1,overall=0,optfat=0,fea
     if feas:
         ax2 = ax.twinx()
         if mr['cur_zone'][0][0] == 'all':
-            ax2.plot(np.array(mr['iteration']), [(-x / len(mr['x_final'][0])) if x is not None else np.nan for x in mr['tur_dist_violation']], 'r:', linewidth = LW2, label='Spacing constraint')
-            ax2.plot(np.array(mr['iteration']), [(-x / len(mr['x_final'][0])) if x is not None else np.nan for x in mr['bound_violation']], 'b:', linewidth = LW2, label='Boundary constraint')
+            ax2.plot(np.array(mr['iteration']), [(-x / len(mr['x_final'][0])) if x is not None else np.nan for x in mr['tur_dist_violation']], 'r:', linewidth = LW2, label='Spacing constr.')
+            ax2.plot(np.array(mr['iteration']), [(-x / len(mr['x_final'][0])) if x is not None else np.nan for x in mr['bound_violation']], 'b:', linewidth = LW2, label='Boundary constr.')
         else:
-            ax2.plot(np.array(mr['iteration']), [(-x / len(mr['y_' + cz[0]][i])) if x is not None else np.nan for i, (x, cz) in enumerate(zip(mr['tur_dist_violation'], mr['cur_zone']))], 'r--', linewidth = LW2, label='Spacing constraint')
-            ax2.plot(np.array(mr['iteration']), [(-x / len(mr['y_' + cz[0]][i])) if x is not None else np.nan for i, (x, cz) in enumerate(zip(mr['bound_violation'], mr['cur_zone']))], 'b--', linewidth = LW2, label='Boundary constraint')
+            ax2.plot(np.array(mr['iteration']), [(-x / len(mr['y_' + cz[0]][i])) if x is not None else np.nan for i, (x, cz) in enumerate(zip(mr['tur_dist_violation'], mr['cur_zone']))], 'r--', linewidth = LW2, label='Spacing constr.')
+            ax2.plot(np.array(mr['iteration']), [(-x / len(mr['y_' + cz[0]][i])) if x is not None else np.nan for i, (x, cz) in enumerate(zip(mr['bound_violation'], mr['cur_zone']))], 'b--', linewidth = LW2, label='Boundary constr.')
         ax2.set_ylabel('Constraint violation [m/turbine]')
         ax2.tick_params(axis='x', labelsize=FS - 1)
         ax2.tick_params(axis='y', labelsize=FS - 1)
@@ -555,7 +555,7 @@ def plot_convergence(mr=None,item=None,plotstr=None,obj=1,overall=0,optfat=0,fea
         # legend
         line1, label1 = ax.get_legend_handles_labels()
         line2, label2 = ax2.get_legend_handles_labels()
-        ax.legend(line1 + line2, label1 + label2, fontsize=FS,ncol=2,loc='upper right')
+        ax.legend(line1 + line2, label1 + label2, fontsize=FS,ncol=1,loc="center left", bbox_to_anchor=(1.15, 0.5))
         if ylim2: ax2.set_ylim(ylim2)
     else:
         ax.legend(fontsize=FS)
@@ -589,7 +589,7 @@ def postprocess_recorder(data, Sequence, step, Subs_x, Subs_y, boundaries, File,
     # Add indices in between
     new_indices = []
     for i in range(len(eva_indices) - 1):
-        start = eva_indices[i]
+        start = eva_indices[i] + 1 # +1 to have constraint value evaluated
         end = eva_indices[i + 1]
         step_indices = list(range(start, end, step))
         new_indices.extend(step_indices)
@@ -1033,7 +1033,7 @@ def evaluate_recorder():
         fig = plt.gcf()
         fig.set_size_inches(16 / 2.54, 4.5)
         
-        plt.gcf().savefig("Figures//FinalLayout.pdf", dpi=500, pad_inches=0)
+        plt.gcf().savefig("Figures//FinalLayout.svg", dpi=500, pad_inches=0)
         
         # plt.text(555000, 5842000, 'N', color='white', fontsize=22, ha='center', va='center')
         # plt.text(548000, 5833000, 'M', color='white', fontsize=22, ha='center', va='center')
