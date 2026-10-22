@@ -1,5 +1,7 @@
 # The IEA Wind 2200-22-MW Reference Offshore Wind Plants
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23569978.svg)](https://doi.org/10.5281/zenodo.23569978)
+
 This repository contains the data and computational tools defining the **IEA Wind 2200-22-MW Reference Offshore Wind Plants**, encoded following the [windIO ontology](https://github.com/IEAWindSystems/windIO). The dataset, its structure, metadata, and the methodology used to generate and optimize the layouts are described in detail in the following *Wind Energy Science* data description article (a link to the preprint will be provided here once available):
 
 > Kainz, S., Quick, J., Bay, C. J., Valotta Rodrigues, R., Arasteh, A., Souza de Alencar, M., Kapila, A., Réthoré, P.-E., Bortolotti, P., & Bottasso, C. L.: *The IEA Wind 2200-22-MW Reference Offshore Wind Plants*. Manuscript under preparation.

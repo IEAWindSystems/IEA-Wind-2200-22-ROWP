@@ -1,0 +1,55 @@
+cff-version: 1.2.0
+message: "If you use this dataset or software, please cite it as below."
+title: "The IEA Wind 2200-22-MW Reference Offshore Wind Plants"
+type: dataset
+version: "1.0"
+date-released: "2026-10-22"
+doi: 10.5281/zenodo.23569978
+repository-code: "https://github.com/IEAWindSystems/IEA-Wind-2200-22-ROWP"
+license: Apache-2.0
+keywords:
+  - wind energy
+  - offshore wind
+  - wind plant layout optimization
+  - reference wind plant
+  - windIO
+authors:
+  - given-names: Samuel
+    family-names: Kainz
+    email: samuel.kainz@tum.de
+    orcid: "https://orcid.org/0009-0003-4163-494X"
+    affiliation: "Wind Energy Institute, Technical University of Munich, Garching bei München, Germany"
+  - given-names: Julian
+    family-names: Quick
+    orcid: "https://orcid.org/0000-0002-1460-9808"
+    affiliation: "Department of Wind and Energy Systems, Technical University of Denmark, Roskilde, Denmark"
+  - given-names: Christopher J.
+    family-names: Bay
+    orcid: "https://orcid.org/0000-0002-2658-5559"
+    affiliation: "National Laboratory of the Rockies (NLR), Golden, CO, USA"
+  - given-names: Rafael
+    family-names: Valotta Rodrigues
+    orcid: "https://orcid.org/0000-0002-2395-9957"
+    affiliation: "Electrical and Computer Engineering Department, University of Massachusetts Boston, Boston, MA, USA"
+  - given-names: Amir
+    family-names: Arasteh
+    affiliation: "Department of Wind and Energy Systems, Technical University of Denmark, Roskilde, Denmark"
+  - given-names: Mauricio
+    family-names: Souza de Alencar
+    orcid: "https://orcid.org/0000-0002-5923-5619"
+    affiliation: "Department of Wind and Energy Systems, Technical University of Denmark, Roskilde, Denmark"
+  - given-names: Abhinav
+    family-names: Kapila
+    affiliation: "RWE Offshore Wind, Hamburg, Germany"
+  - given-names: Pierre-Elouan
+    family-names: Réthoré
+    orcid: "https://orcid.org/0000-0002-2300-5440"
+    affiliation: "Department of Wind and Energy Systems, Technical University of Denmark, Roskilde, Denmark"
+  - given-names: Pietro
+    family-names: Bortolotti
+    orcid: "https://orcid.org/0000-0002-8515-9488"
+    affiliation: "National Laboratory of the Rockies (NLR), Golden, CO, USA"
+  - given-names: "Carlo L."
+    family-names: Bottasso
+    orcid: "https://orcid.org/0000-0002-9931-4389"
+    affiliation: "Wind Energy Institute, Technical University of Munich, Garching bei München, Germany"

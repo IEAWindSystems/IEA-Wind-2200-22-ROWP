@@ -1,0 +1,71 @@
+{
+  "title": "The IEA Wind 2200-22-MW Reference Offshore Wind Plants",
+  "description": "This repository contains the data and computational tools defining the IEA Wind 2200-22-MW Reference Offshore Wind Plants, encoded following the windIO ontology. The reference plants comprise three closely spaced wind plants with a total of 100 IEA Wind 22-MW turbines, exhibiting strong internal and external wake interactions.",
+  "upload_type": "dataset",
+  "license": "Apache-2.0",
+  "access_right": "open",
+  "keywords": [
+    "wind energy",
+    "offshore wind",
+    "wind plant layout optimization",
+    "reference wind plant",
+    "windIO"
+  ],
+  "related_identifiers": [
+    {
+      "identifier": "https://github.com/IEAWindSystems/IEA-Wind-2200-22-ROWP",
+      "relation": "isSupplementTo",
+      "scheme": "url"
+    }
+  ],
+  "creators": [
+    {
+      "name": "Kainz, Samuel",
+      "orcid": "0009-0003-4163-494X",
+      "affiliation": "Wind Energy Institute, Technical University of Munich, Garching bei München, Germany"
+    },
+    {
+      "name": "Quick, Julian",
+      "orcid": "0000-0002-1460-9808",
+      "affiliation": "Department of Wind and Energy Systems, Technical University of Denmark, Roskilde, Denmark"
+    },
+    {
+      "name": "Bay, Christopher J.",
+      "orcid": "0000-0002-2658-5559",
+      "affiliation": "National Laboratory of the Rockies (NLR), Golden, CO, USA"
+    },
+    {
+      "name": "Valotta Rodrigues, Rafael",
+      "orcid": "0000-0002-2395-9957",
+      "affiliation": "Electrical and Computer Engineering Department, University of Massachusetts Boston, Boston, MA, USA"
+    },
+    {
+      "name": "Arasteh, Amir",
+      "affiliation": "Department of Wind and Energy Systems, Technical University of Denmark, Roskilde, Denmark"
+    },
+    {
+      "name": "Souza de Alencar, Mauricio",
+      "orcid": "0000-0002-5923-5619",
+      "affiliation": "Department of Wind and Energy Systems, Technical University of Denmark, Roskilde, Denmark"
+    },
+    {
+      "name": "Kapila, Abhinav",
+      "affiliation": "RWE Offshore Wind, Hamburg, Germany"
+    },
+    {
+      "name": "Réthoré, Pierre-Elouan",
+      "orcid": "0000-0002-2300-5440",
+      "affiliation": "Department of Wind and Energy Systems, Technical University of Denmark, Roskilde, Denmark"
+    },
+    {
+      "name": "Bortolotti, Pietro",
+      "orcid": "0000-0002-8515-9488",
+      "affiliation": "National Laboratory of the Rockies (NLR), Golden, CO, USA"
+    },
+    {
+      "name": "Bottasso, Carlo L.",
+      "orcid": "0000-0002-9931-4389",
+      "affiliation": "Wind Energy Institute, Technical University of Munich, Garching bei München, Germany"
+    }
+  ]
+}
